@@ -10,7 +10,7 @@ import { setOwn } from './set-own.js';
 
 export function sanitizeQuery(
 	rawQuery: Record<string, any>,
-	accountability?: Accountability | null,
+	accountability: Accountability | null | undefined,
 	options?: { applyDefaultLimit?: boolean }
 ): Query {
 	const query: Query = {};
@@ -172,7 +172,7 @@ function sanitizeMeta(rawMeta: any) {
 	return [rawMeta];
 }
 
-function sanitizeDeep(deep: Record<string, any>, accountability?: Accountability | null) {
+function sanitizeDeep(deep: Record<string, any>, accountability: Accountability | null | undefined) {
 	const result: Record<string, any> = {};
 
 	if (typeof deep === 'string') {

@@ -1,8 +1,10 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Item, Query, SchemaOverview } from '@cairncms/types';
+import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import env from '../env.js';
-import type { NestedCollectionNode } from '../types/ast.js';
-import { mergeWithParentItems } from './run-ast.js';
+import type { AST, NestedCollectionNode } from '../types/ast.js';
+import runAST, { mergeWithParentItems } from './run-ast.js';
 
 function makeSchema(): SchemaOverview {
 	return {
@@ -90,5 +92,34 @@ describe('mergeWithParentItems nested o2m pagination', () => {
 		) as Item;
 
 		expect((merged['translations'] as Item[]).map((child) => child['id'])).toEqual([3, 4]);
+	});
+});
+
+describe('runAST accountability', () => {
+	// Fails on first use, so each test can tell whether runAST reached the database.
+	const database = new Proxy(
+		{},
+		{
+			get() {
+				throw new Error('database used');
+			},
+		}
+	) as Knex;
+
+	function makeRootAST(): AST {
+		return { type: 'root', name: 'articles', children: [], query: {} };
+	}
+
+	test('rejects a missing accountability before using the database', async () => {
+		const untypedRunAST = runAST as (ast: AST, schema: SchemaOverview, options?: unknown) => ReturnType<typeof runAST>;
+
+		await expect(untypedRunAST(makeRootAST(), makeSchema())).rejects.toThrow(InvalidQueryException);
+		await expect(untypedRunAST(makeRootAST(), makeSchema(), { knex: database })).rejects.toThrow(InvalidQueryException);
+	});
+
+	test('accepts an explicit null accountability and goes on to the database', async () => {
+		await expect(runAST(makeRootAST(), makeSchema(), { knex: database, accountability: null })).rejects.toThrow(
+			'database used'
+		);
 	});
 });

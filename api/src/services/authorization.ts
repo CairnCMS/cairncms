@@ -222,7 +222,7 @@ export class AuthorizationService {
 
 			if (ast.type === 'root') {
 				// Validate all required permissions once at the root level
-				checkFieldPermissions(ast.name, schema, action, requiredFieldPermissions, ast.query.alias);
+				checkFieldPermissions(ast.name, schema, action, requiredFieldPermissions, ast.query.alias ?? null);
 			}
 
 			return requiredFieldPermissions;
@@ -436,7 +436,7 @@ export class AuthorizationService {
 				schema: SchemaOverview,
 				action: PermissionsAction,
 				requiredPermissions: Record<string, Set<string>>,
-				aliasMap?: Record<string, string> | null
+				aliasMap: Record<string, string> | null
 			) {
 				if (accountability?.admin === true) return;
 
