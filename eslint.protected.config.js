@@ -137,6 +137,32 @@ function apiBoundaryRules({ clients = [], names = {}, context = {} } = {}) {
 	};
 }
 
+const evaluatorMessage =
+	'The app does not evaluate validation or permission rules outside form validation. Use server-computed capabilities.';
+
+/** Builds the app rules that keep the shared validation evaluator out of app code, except the functions in `allowed`. */
+function appEvaluatorRules(allowed = []) {
+	return {
+		'@typescript-eslint/no-restricted-imports': [
+			'error',
+			{
+				paths: [
+					{
+						name: '@cairncms/utils',
+						importNames: ['validatePayload', 'generateJoi'].filter((name) => !allowed.includes(name)),
+						message: evaluatorMessage,
+						allowTypeImports: true,
+					},
+				],
+			},
+		],
+		'no-restricted-syntax': [
+			'error',
+			{ selector: "ImportExpression[source.value='@cairncms/utils']", message: evaluatorMessage },
+		],
+	};
+}
+
 // Run with --no-inline-config, so no comment in a source file can switch these checks off.
 module.exports = defineConfig([
 	...main.filter((entry) => entry.ignores && !entry.files),
@@ -256,5 +282,15 @@ module.exports = defineConfig([
 				],
 			},
 		}),
+	},
+	{
+		files: ['app/src/**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx,vue}'],
+		ignores: ['app/src/**/*.test.ts'],
+		rules: appEvaluatorRules(),
+	},
+	{
+		// Form field validation rules and field conditions.
+		files: ['app/src/utils/validate-item.ts', 'app/src/utils/apply-conditions.ts'],
+		rules: appEvaluatorRules(['validatePayload']),
 	},
 ]);
