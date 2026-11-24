@@ -155,6 +155,34 @@ const cases: [string, Record<string, unknown>, Record<string, unknown>, string, 
 		{ field: 'f', type: 'nends_with' },
 	],
 	[
+		'_istarts_with',
+		{ f: { _istarts_with: OPERAND } },
+		{ f: SUBMITTED },
+		field('Value has to start with the required text.'),
+		{ field: 'f', type: 'istarts_with' },
+	],
+	[
+		'_nistarts_with',
+		{ f: { _nistarts_with: OPERAND } },
+		{ f: `${OPERAND.toLowerCase()}${SUBMITTED}` },
+		field(`Value can't start with the excluded text.`),
+		{ field: 'f', type: 'nistarts_with' },
+	],
+	[
+		'_iends_with',
+		{ f: { _iends_with: OPERAND } },
+		{ f: SUBMITTED },
+		field('Value has to end with the required text.'),
+		{ field: 'f', type: 'iends_with' },
+	],
+	[
+		'_niends_with',
+		{ f: { _niends_with: OPERAND } },
+		{ f: `${SUBMITTED}${OPERAND.toLowerCase()}` },
+		field(`Value can't end with the excluded text.`),
+		{ field: 'f', type: 'niends_with' },
+	],
+	[
 		'_starts_with on a number',
 		{ f: { _starts_with: OPERAND } },
 		{ f: 42 },
@@ -265,6 +293,10 @@ describe('FailedValidationException conversion', () => {
 		['_nstarts_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'nstarts_with', `Value can't start with the excluded text.`],
 		['_ends_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'ends_with', 'Value has to end with the required text.'],
 		['_nends_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'nends_with', `Value can't end with the excluded text.`],
+		['_istarts_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'istarts_with', 'Value has to start with the required text.'],
+		['_nistarts_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'nistarts_with', `Value can't start with the excluded text.`],
+		['_iends_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'iends_with', 'Value has to end with the required text.'],
+		['_niends_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'niends_with', `Value can't end with the excluded text.`],
 		['_regex', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'regex', `Value doesn't have the correct format.`],
 		['_gt', COMPARISON_OPERANDS, COMPARISON_SUBMISSIONS, 'gt', 'Value has to be greater than the minimum.'],
 		[
@@ -303,7 +335,10 @@ describe('FailedValidationException conversion', () => {
 
 	it.each([
 		['_contains', 'abc', 'abcd'],
+		['_icontains', 'ABC', 'xabcx'],
 		['_starts_with', '', 'zzz'],
+		['_istarts_with', 'ABC', 'abcd'],
+		['_niends_with', 'abc', 'abcd'],
 		['_gt', 5, 7],
 		['_between', [0, 10], 7],
 	])('keeps a dynamic %s rule that the value satisfies passing', (rule, operand, submitted) => {

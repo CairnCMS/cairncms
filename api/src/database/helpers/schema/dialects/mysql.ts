@@ -1,8 +1,29 @@
 import type { Knex } from 'knex';
 import { getDatabaseVersion } from '../../../../database/index.js';
-import { SchemaHelper } from '../types.js';
+import { SchemaHelper, escapeLikeLiteral, literalAffixPattern, type AffixComparison } from '../types.js';
 
 export class SchemaHelperMySQL extends SchemaHelper {
+	/** LEFT(column, 0) gives the bound pattern the column's collation. */
+	override caseInsensitiveAffix(column: Knex.Raw | string, operand: string, comparison: AffixComparison): Knex.Raw {
+		const like = comparison.negate ? 'NOT LIKE' : 'LIKE';
+
+		if (comparison.position === 'start') {
+			return this.knex.raw(`LOWER(??) ${like} LOWER(CONCAT(?, LEFT(??, 0))) ESCAPE '!'`, [
+				column,
+				literalAffixPattern(operand, 'start'),
+				column,
+			]);
+		}
+
+		// MySQL 5.7 can miss a suffix match on utf8mb4_unicode_ci when '%' precedes an escaped '!'.
+		return this.knex.raw(`LOWER(RIGHT(??, CHAR_LENGTH(?))) ${like} LOWER(CONCAT(?, LEFT(??, 0))) ESCAPE '!'`, [
+			column,
+			operand,
+			escapeLikeLiteral(operand),
+			column,
+		]);
+	}
+
 	override applyMultiRelationalSort(
 		knex: Knex,
 		dbQuery: Knex.QueryBuilder,

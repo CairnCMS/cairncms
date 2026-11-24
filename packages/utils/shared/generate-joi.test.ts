@@ -299,19 +299,7 @@ describe(`generateJoi`, () => {
 		const mockFieldFilter = { field: { _icontains: 'field' } } as FieldFilter;
 
 		const mockSchema = Joi.object({
-			field: (Joi.string() as StringSchema).contains('field'),
-		})
-			.unknown()
-			.describe();
-
-		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
-	});
-
-	it(`returns the correct schema for an _icontains with null value`, () => {
-		const mockFieldFilter = { field: { _icontains: null } } as FieldFilter;
-
-		const mockSchema = Joi.object({
-			field: Joi.any().equal(true),
+			field: (Joi.string() as StringSchema).icontains('field'),
 		})
 			.unknown()
 			.describe();
@@ -402,9 +390,7 @@ describe(`generateJoi`, () => {
 		const mockFieldFilter = { field: { _ends_with: 'field' } } as FieldFilter;
 
 		const mockSchema = Joi.object({
-			field: Joi.string().pattern(new RegExp(`.*field$`), {
-				name: 'ends_with',
-			}),
+			field: (Joi.string() as StringSchema).endsWith('field'),
 		})
 			.unknown()
 			.describe();
@@ -428,10 +414,7 @@ describe(`generateJoi`, () => {
 		const mockFieldFilter = { field: { _nends_with: 'field' } } as FieldFilter;
 
 		const mockSchema = Joi.object({
-			field: Joi.string().pattern(new RegExp(`.*field$`), {
-				name: 'nends_with',
-				invert: true,
-			}),
+			field: (Joi.string() as StringSchema).nendsWith('field'),
 		})
 			.unknown()
 			.describe();
@@ -444,6 +427,23 @@ describe(`generateJoi`, () => {
 
 		const mockSchema = Joi.object({
 			field: Joi.any().equal(true),
+		})
+			.unknown()
+			.describe();
+
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
+	});
+
+	it.each([
+		['_istarts_with', 'istartsWith'],
+		['_nistarts_with', 'nistartsWith'],
+		['_iends_with', 'iendsWith'],
+		['_niends_with', 'niendsWith'],
+	] as const)(`returns the correct schema for a %s match`, (operator, rule) => {
+		const mockFieldFilter = { field: { [operator]: 'field' } } as FieldFilter;
+
+		const mockSchema = Joi.object({
+			field: (Joi.string() as StringSchema)[rule]('field'),
 		})
 			.unknown()
 			.describe();
@@ -879,6 +879,148 @@ describe(`generateJoi`, () => {
 		});
 	});
 
+	describe(`case-insensitive text rules`, () => {
+		const OPERATORS = ['_icontains', '_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
+
+		const passes = (rule: Record<string, unknown>, field: unknown) =>
+			generateJoi({ field: rule } as unknown as FieldFilter).validate({ field }).error === undefined;
+
+		it.each([
+			['_icontains', 'abc', 'xabcx', true],
+			['_icontains', 'abc', 'xABCx', true],
+			['_icontains', 'AbC', 'zzaBczz', true],
+			['_icontains', 'abc', 'xabx', false],
+			['_istarts_with', 'abc', 'abcdef', true],
+			['_istarts_with', 'abc', 'ABCdef', true],
+			['_istarts_with', 'AbC', 'aBcdef', true],
+			['_istarts_with', 'abc', 'xabc', false],
+			['_nistarts_with', 'abc', 'ABCdef', false],
+			['_nistarts_with', 'abc', 'xabc', true],
+			['_iends_with', 'abc', 'xyzabc', true],
+			['_iends_with', 'abc', 'xyzABC', true],
+			['_iends_with', 'aBc', 'xyzAbC', true],
+			['_iends_with', 'abc', 'abcx', false],
+			['_niends_with', 'abc', 'xyzAbC', false],
+			['_niends_with', 'abc', 'abcx', true],
+		])(`%s %j against %j passes: %s`, (operator, operand, field, expected) => {
+			expect(passes({ [operator]: operand }, field)).toBe(expected);
+		});
+
+		it.each([
+			['_istarts_with', '_nistarts_with', 'a.c', 'A.Cd', 'abcd'],
+			['_istarts_with', '_nistarts_with', '(a', '(Abc', 'abc'],
+			['_istarts_with', '_nistarts_with', '50%', '50%off', '500off'],
+			['_istarts_with', '_nistarts_with', 'team_a', 'TEAM_A1', 'teamXa1'],
+			['_iends_with', '_niends_with', 'x*', 'zzX*', 'zzz'],
+			['_iends_with', '_niends_with', 'team_a', '1TEAM_A', '1teamXa'],
+		])(`%s and %s match %j literally`, (operator, negation, operand, literal, other) => {
+			expect(passes({ [operator]: operand }, literal)).toBe(true);
+			expect(passes({ [operator]: operand }, other)).toBe(false);
+			expect(passes({ [negation]: operand }, literal)).toBe(false);
+			expect(passes({ [negation]: operand }, other)).toBe(true);
+		});
+
+		it.each([
+			['a.c', 'xA.Cx', 'xabcx'],
+			['50%', 'x50%x', 'x500x'],
+			['team_a', 'xTEAM_Ax', 'xteamXax'],
+		])(`_icontains matches %j literally`, (operand, literal, other) => {
+			expect(passes({ _icontains: operand }, literal)).toBe(true);
+			expect(passes({ _icontains: operand }, other)).toBe(false);
+		});
+
+		it.each([
+			['_icontains', 'i', `x${String.fromCodePoint(0x130)}x`, true],
+			['_istarts_with', 'i', `${String.fromCodePoint(0x130)}stanbul`, true],
+			['_istarts_with', String.fromCodePoint(0xdf), String.fromCodePoint(0x1e9e), true],
+			['_istarts_with', 'ss', String.fromCodePoint(0xdf), false],
+			['_iends_with', 'k', `MAR${String.fromCodePoint(0x212a)}`, true],
+		])(`%s %j against %j compares lowercased text, passes: %s`, (operator, operand, field, expected) => {
+			expect(passes({ [operator]: operand }, field)).toBe(expected);
+		});
+
+		it(`treats an empty operand as part of every text`, () => {
+			expect(passes({ _icontains: '' }, 'abc')).toBe(true);
+			expect(passes({ _istarts_with: '' }, 'abc')).toBe(true);
+			expect(passes({ _iends_with: '' }, 'abc')).toBe(true);
+			expect(passes({ _nistarts_with: '' }, 'abc')).toBe(false);
+			expect(passes({ _niends_with: '' }, 'abc')).toBe(false);
+		});
+
+		it.each(OPERATORS)(
+			`%s rejects an empty submitted value before comparing, as the case-sensitive rules do`,
+			(operator) => {
+				expect(passes({ [operator]: 'abc' }, '')).toBe(false);
+			}
+		);
+
+		it.each(OPERATORS)(`%s rejects every provided value when its operand isn't text`, (operator) => {
+			for (const operand of [null, undefined, 42, true, new Date(0)]) {
+				const filter = { field: { [operator]: operand } } as unknown as FieldFilter;
+
+				for (const field of ['abc', '', 42, true, null, String(operand)]) {
+					const { error } = generateJoi(filter).validate({ field });
+
+					expect(error?.details[0]?.context?.['validationOperator'], JSON.stringify({ operand, field })).toBe(operator);
+				}
+
+				expect(generateJoi(filter).validate({}).error).toBeUndefined();
+				expect(generateJoi(filter, { requireAll: true }).validate({}).error?.details[0]?.type).toBe('any.required');
+			}
+		});
+	});
+
+	describe(`suffix rules`, () => {
+		it.each([
+			['_ends_with', false],
+			['_nends_with', true],
+		])(`%s matches a literal suffix at the end of the value`, (operator, invert) => {
+			const suffixes = ['a', 'ab', 'A', '.*', '$', '\n', 'a\nb', ''];
+			const values = ['', 'a', 'ba', 'ab', 'xab', 'xAB', 'a\nb', 'ab\n', 'x.*', '$', 'line\nab', 'zzz'];
+
+			for (const suffix of suffixes) {
+				const filter = { field: { [operator]: suffix } } as unknown as FieldFilter;
+				const name = operator.slice(1);
+				const pattern = Joi.string().pattern(new RegExp(`.*${escapeRegExp(suffix)}$`), { name, invert });
+
+				for (const field of values) {
+					const passes = generateJoi(filter).validate({ field }).error === undefined;
+
+					expect(passes, JSON.stringify({ suffix, field })).toBe(pattern.validate(field).error === undefined);
+				}
+			}
+		});
+
+		it.each(['_ends_with', '_nends_with', '_iends_with', '_niends_with'])(
+			`%s checks a 50,000 character value in under 250 ms`,
+			(operator) => {
+				const schema = generateJoi({ field: { [operator]: 'b' } } as unknown as FieldFilter);
+				const started = performance.now();
+
+				schema.validate({ field: 'a'.repeat(50_000) });
+
+				expect(performance.now() - started).toBeLessThan(250);
+			}
+		);
+	});
+
+	it.each([
+		['_icontains', 'zzz'],
+		['_ends_with', 'zzz'],
+		['_nends_with', 'zzzOPERAND_MARKER'],
+		['_istarts_with', 'zzz'],
+		['_nistarts_with', 'operand_markerzzz'],
+		['_iends_with', 'zzz'],
+		['_niends_with', 'zzzoperand_marker'],
+	])(`reports a failed %s rule without the rule's text`, (operator, field) => {
+		const filter = { field: { [operator]: 'OPERAND_MARKER' } } as unknown as FieldFilter;
+		const detail = generateJoi(filter).validate({ field }).error?.details[0];
+		const contextKeys = Object.keys(detail?.context ?? {}).sort();
+
+		expect(detail?.message).not.toContain('OPERAND_MARKER');
+		expect(contextKeys).toEqual(['key', 'label', 'validationOperator', 'value']);
+	});
+
 	describe(`validation operator tags`, () => {
 		it.each([
 			['_eq', { _eq: 'word' }, 'other', 'any.only'],
@@ -893,12 +1035,23 @@ describe(`generateJoi`, () => {
 			['_contains', { _contains: 'a' }, 'b', 'string.contains'],
 			['_contains', { _contains: null }, 'b', 'any.only'],
 			['_icontains', { _icontains: 'a' }, 42, 'string.base'],
+			['_icontains', { _icontains: 'a' }, 'b', 'string.icontains'],
+			['_icontains', { _icontains: null }, 'b', 'any.only'],
 			['_ncontains', { _ncontains: 'a' }, 'a', 'string.ncontains'],
 			['_starts_with', { _starts_with: 'a' }, 'b', 'string.pattern.name'],
 			['_starts_with', { _starts_with: null }, 'b', 'any.only'],
 			['_nstarts_with', { _nstarts_with: 'a' }, 'a', 'string.pattern.invert.name'],
 			['_ends_with', { _ends_with: 'a' }, 42, 'string.base'],
+			['_ends_with', { _ends_with: 'a' }, 'b', 'string.endsWith'],
+			['_nends_with', { _nends_with: 'a' }, 'ba', 'string.nendsWith'],
 			['_nends_with', { _nends_with: 42 }, 'a', 'any.only'],
+			['_istarts_with', { _istarts_with: 'a' }, 'b', 'string.istartsWith'],
+			['_istarts_with', { _istarts_with: null }, 'b', 'any.only'],
+			['_nistarts_with', { _nistarts_with: 'a' }, 'A', 'string.nistartsWith'],
+			['_iends_with', { _iends_with: 'a' }, 42, 'string.base'],
+			['_iends_with', { _iends_with: 'a' }, 'b', 'string.iendsWith'],
+			['_niends_with', { _niends_with: 'a' }, 'bA', 'string.niendsWith'],
+			['_niends_with', { _niends_with: 42 }, 'a', 'any.only'],
 			['_regex', { _regex: '^a' }, 'b', 'string.pattern.base'],
 			['_regex', { _regex: null }, 'b', 'any.only'],
 			['_gt', { _gt: 5 }, 1, 'number.greater'],
@@ -935,7 +1088,7 @@ describe(`generateJoi`, () => {
 			['_nempty', { _nempty: true }, Joi.any().invalid('')],
 			['_contains a word', { _contains: 'a' }, (Joi.string() as StringSchema).contains('a')],
 			['_contains null', { _contains: null }, Joi.any().equal(true)],
-			['_icontains a word', { _icontains: 'a' }, (Joi.string() as StringSchema).contains('a')],
+			['_icontains a word', { _icontains: 'a' }, (Joi.string() as StringSchema).icontains('a')],
 			['_ncontains a word', { _ncontains: 'a' }, (Joi.string() as StringSchema).ncontains('a')],
 			['_ncontains a number', { _ncontains: 42 }, Joi.any().equal(true)],
 			['_starts_with a word', { _starts_with: 'a' }, Joi.string().pattern(/^a.*/, { name: 'starts_with' })],
@@ -945,8 +1098,8 @@ describe(`generateJoi`, () => {
 				{ _nstarts_with: 'a' },
 				Joi.string().pattern(/^a.*/, { name: 'nstarts_with', invert: true }),
 			],
-			['_ends_with a word', { _ends_with: 'a' }, Joi.string().pattern(/.*a$/, { name: 'ends_with' })],
-			['_nends_with a word', { _nends_with: 'a' }, Joi.string().pattern(/.*a$/, { name: 'nends_with', invert: true })],
+			['_ends_with a word', { _ends_with: 'a' }, (Joi.string() as StringSchema).endsWith('a')],
+			['_nends_with a word', { _nends_with: 'a' }, (Joi.string() as StringSchema).nendsWith('a')],
 			['_regex a pattern', { _regex: '^a' }, Joi.string().regex(/^a/)],
 			['_regex a number', { _regex: 42 }, Joi.string().regex(/42/)],
 			['_regex null', { _regex: null }, Joi.any().equal(true)],

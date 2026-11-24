@@ -5,6 +5,16 @@ type Options = {
 	filter: Filter;
 };
 
+const REPORTED_FAILURE_TYPES = new Map<string, string>([
+	['string.icontains', 'string.contains'],
+	['string.endsWith', 'string.pattern.name'],
+	['string.nendsWith', 'string.pattern.invert.name'],
+	['string.istartsWith', 'string.pattern.name'],
+	['string.nistartsWith', 'string.pattern.invert.name'],
+	['string.iendsWith', 'string.pattern.name'],
+	['string.niendsWith', 'string.pattern.invert.name'],
+]);
+
 export default defineOperationApi<Options>({
 	id: 'condition',
 
@@ -16,7 +26,7 @@ export default defineOperationApi<Options>({
 		throw errors.flatMap((error) =>
 			error.details.map((detail) => ({
 				path: detail.path,
-				type: detail.type,
+				type: REPORTED_FAILURE_TYPES.get(detail.type) ?? detail.type,
 			}))
 		);
 	},

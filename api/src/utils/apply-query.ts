@@ -27,6 +27,8 @@ import { customAlphabet } from 'nanoid/non-secure';
 
 export const generateAlias = customAlphabet('abcdefghijklmnopqrstuvwxyz', 5);
 
+const LITERAL_PATTERN_OPERATORS = new Set(['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with']);
+
 /**
  * Apply the Query to a given Knex query builder instance
  */
@@ -562,23 +564,23 @@ export function applyFilter(
 
 				if (!columnPath) continue;
 
-				const { type, special } = validateFilterField(
+				const { type, special, dbType } = validateFilterField(
 					schema.collections[targetCollection]!.fields,
 					stripFunction(filterPath[filterPath.length - 1]!),
 					targetCollection
 				)!;
 
-				validateFilterOperator(type, filterOperator, special);
+				validateFilterOperator(type, filterOperator, special, dbType);
 
 				applyFilterToQuery(columnPath, filterOperator, filterValue, logical, targetCollection);
 			} else {
-				const { type, special } = validateFilterField(
+				const { type, special, dbType } = validateFilterField(
 					schema.collections[collection]!.fields,
 					stripFunction(filterPath[0]!),
 					collection
 				)!;
 
-				validateFilterOperator(type, filterOperator, special);
+				validateFilterOperator(type, filterOperator, special, dbType);
 
 				applyFilterToQuery(`${collection}.${filterPath[0]}`, filterOperator, filterValue, logical);
 			}
@@ -592,7 +594,7 @@ export function applyFilter(
 			return fields[key];
 		}
 
-		function validateFilterOperator(type: Type, filterOperator: string, special: string[]) {
+		function validateFilterOperator(type: Type, filterOperator: string, special: string[], dbType: string | null) {
 			if (filterOperator.startsWith('_')) {
 				filterOperator = filterOperator.slice(1);
 			}
@@ -601,6 +603,10 @@ export function applyFilter(
 				throw new InvalidQueryException(
 					`"${type}" field type does not contain the "_${filterOperator}" filter operator`
 				);
+			}
+
+			if (!getFilterOperatorsForType(type, { dbType }).includes(filterOperator as ClientFilterOperator)) {
+				throw new InvalidQueryException(`The "_${filterOperator}" filter operator requires a text column`);
 			}
 
 			if (
@@ -622,13 +628,9 @@ export function applyFilter(
 		) {
 			const [table, column] = key.split('.');
 
-			// Is processed through Knex.Raw, so should be safe to string-inject into these where queries
+			// Knex accepts raw column expressions here despite its column-name types.
 			const selectionRaw = getColumn(knex, table!, column!, false, schema, { originalCollectionName }) as any;
 
-			// Knex supports "raw" in the columnName parameter but doesn't type it as such;
-			// the `as any` cast above is required until upstream knex types are fixed.
-
-			// These operators don't rely on a value, and can thus be used without one (eg `?filter[field][_null]`)
 			if ((operator === '_null' && compareValue !== false) || (operator === '_nnull' && compareValue === false)) {
 				dbQuery[logical].whereNull(selectionRaw);
 			}
@@ -649,19 +651,12 @@ export function applyFilter(
 				});
 			}
 
-			// The following fields however, require a value to be run. If no value is passed, we
-			// ignore them. This allows easier use in GraphQL, where you wouldn't be able to
-			// conditionally build out your filter structure (#4471)
 			if (compareValue === undefined) return;
 
 			if (Array.isArray(compareValue)) {
-				// Tip: when using a `[Type]` type in GraphQL, but don't provide the variable, it'll be
-				// reported as [undefined].
-				// We need to remove any undefined values, as they are useless
 				compareValue = compareValue.filter((val) => val !== undefined);
 			}
 
-			// Cast filter value (compareValue) based on function used
 			if (column!.includes('(') && column!.includes(')')) {
 				const functionName = column!.split('(')[0] as FieldFunction;
 				const type = getOutputTypeForFunction(functionName);
@@ -671,7 +666,6 @@ export function applyFilter(
 				}
 			}
 
-			// Cast filter value (compareValue) based on type of field being filtered against
 			const [collection, field] = key.split('.');
 			const mappedCollection = (originalCollectionName || collection)!;
 
@@ -693,6 +687,10 @@ export function applyFilter(
 						compareValue = Number(compareValue);
 					}
 				}
+			}
+
+			if (LITERAL_PATTERN_OPERATORS.has(operator) && (typeof compareValue !== 'string' || compareValue === '')) {
+				throw new InvalidQueryException(`The filter value for "${operator}" has to be a non-empty string`);
 			}
 
 			if (operator === '_eq') {
@@ -736,11 +734,15 @@ export function applyFilter(
 			}
 
 			if (operator === '_istarts_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) LIKE ?`, [selectionRaw, `${compareValue.toLowerCase()}%`]);
+				dbQuery[logical].whereRaw(
+					helpers.schema.caseInsensitiveAffix(selectionRaw, compareValue, { position: 'start', negate: false })
+				);
 			}
 
 			if (operator === '_nistarts_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) NOT LIKE ?`, [selectionRaw, `${compareValue.toLowerCase()}%`]);
+				dbQuery[logical].whereRaw(
+					helpers.schema.caseInsensitiveAffix(selectionRaw, compareValue, { position: 'start', negate: true })
+				);
 			}
 
 			if (operator === '_ends_with') {
@@ -752,11 +754,15 @@ export function applyFilter(
 			}
 
 			if (operator === '_iends_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) LIKE ?`, [selectionRaw, `%${compareValue.toLowerCase()}`]);
+				dbQuery[logical].whereRaw(
+					helpers.schema.caseInsensitiveAffix(selectionRaw, compareValue, { position: 'end', negate: false })
+				);
 			}
 
 			if (operator === '_niends_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) NOT LIKE ?`, [selectionRaw, `%${compareValue.toLowerCase()}`]);
+				dbQuery[logical].whereRaw(
+					helpers.schema.caseInsensitiveAffix(selectionRaw, compareValue, { position: 'end', negate: true })
+				);
 			}
 
 			if (operator === '_gt') {

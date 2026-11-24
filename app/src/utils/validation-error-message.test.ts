@@ -47,6 +47,10 @@ describe('validationErrorMessage', () => {
 		['nstarts_with', `Value can't start with the excluded text`],
 		['ends_with', 'Value has to end with the required text'],
 		['nends_with', `Value can't end with the excluded text`],
+		['istarts_with', 'Value has to start with the required text'],
+		['nistarts_with', `Value can't start with the excluded text`],
+		['iends_with', 'Value has to end with the required text'],
+		['niends_with', `Value can't end with the excluded text`],
 		['null', 'Value has to be null'],
 		['nnull', `Value can't be null`],
 		['empty', 'Value has to be empty'],
@@ -64,10 +68,6 @@ describe('validationErrorMessage', () => {
 	it('falls back to the format message when the type is absent or unknown', () => {
 		expect(validationErrorMessage({ code: 'FAILED_VALIDATION' })).toBe(`Value doesn't have the correct format`);
 		expect(validationErrorMessage(failure('unknown_rule'))).toBe(`Value doesn't have the correct format`);
-	});
-
-	it('falls back to the format message for a case-insensitive pattern, which has no message yet', () => {
-		expect(validationErrorMessage(failure('istarts_with'))).toBe(`Value doesn't have the correct format`);
 	});
 
 	it('never renders a value the error still carries', () => {

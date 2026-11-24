@@ -20,6 +20,10 @@ export type FailedValidationType =
 	| 'lte'
 	| 'contains'
 	| 'ncontains'
+	| 'istarts_with'
+	| 'nistarts_with'
+	| 'iends_with'
+	| 'niends_with'
 	| 'required'
 	| 'regex'
 	| PatternRuleName;
@@ -52,8 +56,12 @@ const AUTHORED_OPERATOR_TYPES = new Map<unknown, FailedValidationType>([
 	['_ncontains', 'ncontains'],
 	['_starts_with', 'starts_with'],
 	['_nstarts_with', 'nstarts_with'],
+	['_istarts_with', 'istarts_with'],
+	['_nistarts_with', 'nistarts_with'],
 	['_ends_with', 'ends_with'],
 	['_nends_with', 'nends_with'],
+	['_iends_with', 'iends_with'],
+	['_niends_with', 'niends_with'],
 	['_regex', 'regex'],
 	['_gt', 'gt'],
 	['_gte', 'gte'],
@@ -68,13 +76,7 @@ export type FailedValidationExtensions = {
 	type?: FailedValidationType;
 };
 
-/**
- * Converts a Joi validation error item into the details of a failed validation. The details carry no compared or
- * submitted value, and leave `type` unset when the item matches no known rule. Equality, membership, null, and empty
- * failures take their `type` from the `validationOperator` the schema recorded, never from the compared values. Every
- * other failure of a text or comparison rule takes the rule's own type, and a range failure takes none, so the
- * details do not depend on the compared value's kind. A missing required value is reported as required.
- */
+/** Classify failures from rule metadata without reading or exposing the submitted value or rule operand. */
 export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorItem): FailedValidationExtensions {
 	const extensions: FailedValidationExtensions = {
 		field: item.path[0],

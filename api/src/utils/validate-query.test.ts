@@ -157,6 +157,18 @@ describe('boolean and geometry flag validation', async () => {
 	});
 });
 
+describe('case-insensitive starts and ends operands', async () => {
+	const validateQuery = await getValidateQuery();
+
+	test.each(['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'])('checks the %s operand', (operator) => {
+		const query = (operand: unknown) => ({ filter: { title: { [operator]: operand } } } as any);
+
+		expect(() => validateQuery(query('abc'))).not.toThrowError();
+		expect(() => validateQuery(query(''))).toThrowError(`You can't filter for an empty string`);
+		expect(() => validateQuery(query({ a: 1 }))).toThrowError('has to be a string, number, or boolean');
+	});
+});
+
 describe('spatial operand strings', async () => {
 	const validateQuery = await getValidateQuery();
 	const { parseFilter } = await import('@cairncms/utils');

@@ -150,6 +150,10 @@ validation_failure:
   nstarts_with: Value can't start with the excluded text
   ends_with: Value has to end with the required text
   nends_with: Value can't end with the excluded text
+  istarts_with: Value has to start with the required text
+  nistarts_with: Value can't start with the excluded text
+  iends_with: Value has to end with the required text
+  niends_with: Value can't end with the excluded text
 all_access: All Access
 no_access: No Access
 use_custom: Use Custom
@@ -713,8 +717,12 @@ operators:
   icontains: Contains (insensitive)
   starts_with: Starts with
   nstarts_with: Doesn't start with
+  istarts_with: Starts with (insensitive)
+  nistarts_with: Doesn't start with (insensitive)
   ends_with: Ends with
   nends_with: Doesn't end with
+  iends_with: Ends with (insensitive)
+  niends_with: Doesn't end with (insensitive)
   between: Is between
   nbetween: Isn't between
   empty: Is empty

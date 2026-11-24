@@ -180,7 +180,12 @@ Filter variables are particularly useful in role permissions, where the same rul
 | `_intersects_bbox` | Geometry intersects a bounding box. |
 | `_nintersects_bbox` | Geometry does not intersect a bounding box. |
 
-Operators that take no value (`_null`, `_nnull`, `_empty`, `_nempty`) accept `true` to apply the rule and `false` to apply its inverse. The case-insensitive variants are useful for fields that store user-supplied text without consistent casing (email addresses, search terms, tags).
+Operators that take no value (`_null`, `_nnull`, `_empty`, `_nempty`) accept `true` to apply the rule and `false` to apply its inverse.
+
+`_istarts_with`, `_nistarts_with`, `_iends_with`, and `_niends_with` ignore case, which is useful for fields that store user-supplied text without consistent casing (email addresses, search terms, tags). They match the value literally, so `%` and `_` stand for themselves.
+
+- **In a filter**, they need a text column and a non-empty text value. Any other value, including a `$CURRENT_USER` field whose value is empty, makes the request fail with `INVALID_QUERY`. A stored permission whose `$CURRENT_USER` or `$CURRENT_ROLE` path no longer exists is ignored instead, as described in [Access control](/docs/api/system-collections/access-control/#permission-record-fields). The database lowercases both the column and the value. PostgreSQL, MySQL, and MariaDB then compare them under the column's collation, so an accent-insensitive MySQL or MariaDB column, for example, also matches letters that differ only by an accent. SQLite compares the lowercased bytes, and it lowercases only ASCII letters, so it compares other letters exactly.
+- **In a validation rule**, CairnCMS lowercases both sides. With an empty value, `_istarts_with` and `_iends_with` accept every non-empty submitted text, and `_nistarts_with` and `_niends_with` reject it. An empty submitted value fails all four. A value that isn't text rejects every submitted value. A validation rule and a filter can therefore disagree for some non-ASCII letters.
 
 `_in` and `_nin` with an empty array preserve their mathematical meaning: `_in: []` matches no rows (the value is in an empty set, which is impossible), while `_nin: []` matches every row (the value is not in an empty set, which is trivially true). Permission rules expressed with these operators behave the same way; an `_in: []` permission filter denies all matches, and a `_nin: []` permission filter denies nothing.
 
