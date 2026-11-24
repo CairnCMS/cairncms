@@ -4,8 +4,8 @@ import type { Api } from '../../fixtures/environment';
 import { createIdentityTest, USER } from '../../fixtures/identities';
 import { capturePrerequisite, requirePrerequisite, type Prerequisite } from '../../fixtures/prerequisite';
 import request, { CreateItem, requestGraphQL, setupRequest } from '../../fixtures/request';
-import { CreateCollection, CreateField, CreateRole } from '../../fixtures/schema';
-import { familyOf } from '../../harness/database-vendors.mjs';
+import { CreateCollection, CreateField, CreateFieldO2M, CreateRole } from '../../fixtures/schema';
+import { familyOf, isMysqlFamily } from '../../harness/database-vendors.mjs';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 
 initializeFixtures();
@@ -14,7 +14,13 @@ const vendor = inject('integration').vendor;
 
 const CODES = 'case_insensitive_codes';
 const ENTRIES = 'case_insensitive_entries';
+const PARENTS = 'case_insensitive_parents';
+const CHILDREN = 'case_insensitive_children';
 const ADMIN = `Bearer ${USER.ADMIN!.TOKEN}`;
+const UNRESOLVED = '$NOW(not a duration)';
+const ECOLE = `${String.fromCodePoint(0xc9)}cole`;
+const E_ACUTE = String.fromCodePoint(0xe9);
+const NUL = String.fromCharCode(0);
 
 const VALIDATOR = 'CaseInsensitiveValidator';
 const TENANT_A = 'CaseInsensitiveTenantA';
@@ -25,14 +31,36 @@ const EXCLUDER_A = 'CaseInsensitiveExcluderA';
 const EXCLUDER_NULL = 'CaseInsensitiveExcluderNull';
 const EXCLUDER_EMPTY = 'CaseInsensitiveExcluderEmpty';
 const LITERAL_READER = 'CaseInsensitiveLiteralReader';
+const ACCENT_EXCLUDER = 'CaseInsensitiveAccentExcluder';
+const UNRESOLVED_DIRECT = 'CaseInsensitiveUnresolvedDirect';
+const UNRESOLVED_NEGATED = 'CaseInsensitiveUnresolvedNegated';
+const UNRESOLVED_RELATIONAL = 'CaseInsensitiveUnresolvedRelational';
 
 const OPERATORS = ['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
 
 const ROWS: Record<string, string[]> = {
 	tenant: ['Tenant-A-1', 'tenant-a-2', 'TENANT-B-1', 'tenant-b-2'],
-	wildcard: ['team_a1', 'teamXa1', '1team_a', '1teamXa', '50%off', '500off'],
+	wildcard: ['team_a1', 'teamXa1', '1team_a', '1teamXa', '50%off', '500off', 'a!b1', 'a!!b1'],
 	literal: ['true-blue', 'TRUE-red', 'untrue', 'null-row', 'NULL-ROW'],
+	turkish: ['Istanbul-1', 'istanbul-2', 'Xstanbul-1'],
+	fixed: ['ABC', 'abd', 'XYC'],
+	accent: ['\u00c9cole-1', 'Xcole-1', 'caf\u00e9', 'cafx'],
 };
+
+const NUL_ROWS: [string, string | null][] = [
+	['n1', 'note\u0000tail'],
+	['n2', 'Note\u0000TAIL'],
+	['n3', 'Note'],
+	['n4', 'xnote'],
+	['n5', 'no'],
+	['n6', null],
+];
+
+const PARENT_ROWS: [string, string[]][] = [
+	['mixed', ['Tenant-A-1', 'other-1']],
+	['b', ['tenant-b-2']],
+	['empty', []],
+];
 
 const VALIDATION = [
 	{
@@ -103,6 +131,7 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 						fields: [
 							{ field: 'code', type: 'string' },
 							{ field: 'kind', type: 'string' },
+							{ field: 'label', type: 'string' },
 							{ field: 'span', type: 'string' },
 							{ field: 'data', type: 'binary' },
 						],
@@ -115,6 +144,36 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 							'span',
 						]);
 
+						await api.database.raw('ALTER TABLE ?? ADD COLUMN ?? text COLLATE "C"', [CODES, 'ccode']);
+						await api.database.raw('ALTER TABLE ?? ADD COLUMN ?? char(5)', [CODES, 'fixed']);
+
+						if (vendor === 'postgres18') {
+							await api.database.raw(
+								`CREATE COLLATION case_insensitive_level2 (provider = icu, locale = 'und-u-ks-level2', deterministic = false)`
+							);
+
+							await api.database.raw('ALTER TABLE ?? ADD COLUMN ?? text COLLATE case_insensitive_level2', [
+								CODES,
+								'ncode',
+							]);
+						}
+					}
+
+					if (isMysqlFamily(vendor)) {
+						for (const [column, collation] of [
+							['trcode', 'utf8mb4_turkish_ci'],
+							['aicode', 'utf8mb4_general_ci'],
+						]) {
+							await api.database.raw(
+								`ALTER TABLE ?? ADD COLUMN ?? varchar(255) CHARACTER SET utf8mb4 COLLATE ${collation}`,
+								[CODES, column]
+							);
+						}
+
+						await api.database.raw('ALTER TABLE ?? ADD COLUMN ?? char(5)', [CODES, 'fixed']);
+					}
+
+					if (familyOf(vendor) !== 'sqlite') {
 						await setupRequest(api.url).post('/utils/cache/clear').set('Authorization', ADMIN).expect(200);
 					}
 
@@ -132,6 +191,55 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 						for (const code of codes) await CreateItem(api, { collection: CODES, item: { code, kind } });
 					}
 
+					const copyCode = (column: string, kind: string) =>
+						api
+							.database(CODES)
+							.where({ kind })
+							.update({ [column]: api.database.ref('code') });
+
+					if (familyOf(vendor) === 'postgres') {
+						await copyCode('ccode', 'accent');
+						await copyCode('fixed', 'fixed');
+						if (vendor === 'postgres18') await copyCode('ncode', 'accent');
+					}
+
+					if (isMysqlFamily(vendor)) {
+						await copyCode('trcode', 'turkish');
+						await copyCode('aicode', 'accent');
+						await copyCode('fixed', 'fixed');
+					}
+
+					if (familyOf(vendor) === 'sqlite') {
+						for (const [label, code] of NUL_ROWS) {
+							await CreateItem(api, { collection: CODES, item: { code, kind: 'nul', label } });
+						}
+
+						const stored = await api
+							.database(CODES)
+							.where({ kind: 'nul', label: 'n1' })
+							.first(api.database.raw('length(CAST(code AS BLOB)) AS bytes'));
+
+						expect(Number(stored.bytes)).toBe(9);
+					}
+
+					await CreateCollection(api, { collection: PARENTS, fields: [{ field: 'name', type: 'string' }] });
+					await CreateCollection(api, { collection: CHILDREN, fields: [{ field: 'code', type: 'string' }] });
+
+					await CreateFieldO2M(api, {
+						collection: PARENTS,
+						field: 'children',
+						otherCollection: CHILDREN,
+						otherField: 'parent',
+					});
+
+					for (const [name, children] of PARENT_ROWS) {
+						const parent = await CreateItem(api, { collection: PARENTS, item: { name } });
+
+						for (const code of children) {
+							await CreateItem(api, { collection: CHILDREN, item: { code, parent: parent.id } });
+						}
+					}
+
 					const role = async (name: string) =>
 						(await CreateRole(api, { name, appAccessEnabled: false, adminAccessEnabled: false })).id;
 
@@ -139,6 +247,29 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 					const tenant = await role('case_insensitive_tenant');
 					const excluder = await role('case_insensitive_excluder');
 					const literal = await role('case_insensitive_literal');
+					const accentExcluder = await role('case_insensitive_accent_excluder');
+					const unresolvedDirect = await role('case_insensitive_unresolved_direct');
+					const unresolvedNegated = await role('case_insensitive_unresolved_negated');
+					const unresolvedRelational = await role('case_insensitive_unresolved_relational');
+
+					for (const [readRole, collection, permissions] of [
+						[accentExcluder, CODES, { _and: [{ kind: { _eq: 'accent' } }, { code: { _nistarts_with: ECOLE } }] }],
+						[unresolvedDirect, CODES, { code: { _istarts_with: UNRESOLVED } }],
+						[
+							unresolvedNegated,
+							CODES,
+							{ _and: [{ kind: { _eq: 'tenant' } }, { code: { _nistarts_with: UNRESOLVED } }] },
+						],
+						[unresolvedRelational, PARENTS, { children: { _none: { code: { _istarts_with: UNRESOLVED } } } }],
+					] as const) {
+						await asAdmin('post', '/permissions', {
+							role: readRole,
+							collection,
+							action: 'read',
+							fields: collection === CODES ? ['code'] : ['name'],
+							permissions,
+						});
+					}
 
 					for (const action of ['create', 'update']) {
 						await asAdmin('post', '/permissions', {
@@ -210,6 +341,10 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 						[EXCLUDER_NULL, excluder, null],
 						[EXCLUDER_EMPTY, excluder, ''],
 						[LITERAL_READER, literal, null],
+						[ACCENT_EXCLUDER, accentExcluder, null],
+						[UNRESOLVED_DIRECT, unresolvedDirect, null],
+						[UNRESOLVED_NEGATED, unresolvedNegated, null],
+						[UNRESOLVED_RELATIONAL, unresolvedRelational, null],
 					] as const) {
 						await asAdmin('post', '/users', {
 							email: `${token.toLowerCase()}@example.com`,
@@ -302,11 +437,27 @@ const QUERIES: [string, string, Record<string, unknown>, string[]][] = [
 	['_iends_with', 'tenant', { _iends_with: '-a-1' }, ['Tenant-A-1']],
 	['_niends_with', 'tenant', { _niends_with: '-A-1' }, ['TENANT-B-1', 'tenant-a-2', 'tenant-b-2']],
 	['_istarts_with', 'wildcard', { _istarts_with: 'TEAM_A' }, ['team_a1']],
-	['_nistarts_with', 'wildcard', { _nistarts_with: 'team_a' }, ['1team_a', '1teamXa', '500off', '50%off', 'teamXa1']],
+	[
+		'_nistarts_with',
+		'wildcard',
+		{ _nistarts_with: 'team_a' },
+		['1team_a', '1teamXa', '500off', '50%off', 'teamXa1', 'a!b1', 'a!!b1'],
+	],
 	['_iends_with', 'wildcard', { _iends_with: 'TEAM_A' }, ['1team_a']],
-	['_niends_with', 'wildcard', { _niends_with: 'team_a' }, ['1teamXa', '500off', '50%off', 'teamXa1', 'team_a1']],
+	[
+		'_niends_with',
+		'wildcard',
+		{ _niends_with: 'team_a' },
+		['1teamXa', '500off', '50%off', 'teamXa1', 'team_a1', 'a!b1', 'a!!b1'],
+	],
 	['_istarts_with', 'wildcard', { _istarts_with: '50%' }, ['50%off']],
+	['_istarts_with', 'wildcard', { _istarts_with: 'A!B' }, ['a!b1']],
+	['_iends_with', 'wildcard', { _iends_with: '!B1' }, ['a!b1', 'a!!b1']],
 	['_istarts_with', 'literal', { _istarts_with: 'true' }, ['TRUE-red', 'true-blue']],
+	['_istarts_with', 'accent', { _istarts_with: ECOLE }, [`${ECOLE}-1`]],
+	['_nistarts_with', 'accent', { _nistarts_with: ECOLE }, ['Xcole-1', `caf${E_ACUTE}`, 'cafx']],
+	['_iends_with', 'accent', { _iends_with: E_ACUTE }, [`caf${E_ACUTE}`]],
+	['_niends_with', 'accent', { _niends_with: E_ACUTE }, [`${ECOLE}-1`, 'Xcole-1', 'cafx']],
 ];
 
 describe('Case-insensitive starts and ends operators in queries', () => {
@@ -389,7 +540,204 @@ describe('Case-insensitive starts and ends operators in stored read rules', () =
 		expect(response.statusCode).toBe(200);
 		expect(codes(response.body.data)).toEqual(sorted(['NULL-ROW', 'null-row']));
 	});
+
+	test('leave out the rows an accented prefix excludes', async ({ api }) => {
+		const response = await readCodes(api, ACCENT_EXCLUDER);
+
+		expect(response.statusCode).toBe(200);
+		expect(codes(response.body.data)).toEqual(sorted(['Xcole-1', `caf${E_ACUTE}`, 'cafx']));
+	});
+
+	for (const [label, token, operator] of [
+		['a rule', UNRESOLVED_DIRECT, '_istarts_with'],
+		['a negated rule inside _and', UNRESOLVED_NEGATED, '_nistarts_with'],
+	] as const) {
+		test(`reject ${label} whose dynamic value resolves to nothing, over REST and GraphQL`, async ({ api }) => {
+			const expected = invalidQuery(`The filter value for "${operator}" has to be a non-empty string`);
+			const rest = await readCodes(api, token);
+
+			expect(rest.statusCode).toBe(400);
+			expect(rest.body.errors).toEqual(expected);
+
+			const graphql = await requestGraphQL(api.url, false, token, {
+				query: { [CODES]: { __args: { limit: -1 }, code: true } },
+			});
+
+			expect(graphql.body.data?.[CODES] ?? null).toBeNull();
+
+			expect(
+				graphql.body.errors.map((error: { message: string; extensions: unknown }) => ({
+					message: error.message,
+					extensions: error.extensions,
+				}))
+			).toEqual(expected);
+		});
+	}
+
+	test('reject a relational rule whose dynamic value resolves to nothing, over REST and GraphQL', async ({ api }) => {
+		const expected = invalidQuery('The filter value for "_istarts_with" has to be a non-empty string');
+
+		const rest = await request(api.url)
+			.get(`/items/${PARENTS}`)
+			.query({ fields: 'name' })
+			.set('Authorization', `Bearer ${UNRESOLVED_RELATIONAL}`);
+
+		expect(rest.statusCode).toBe(400);
+		expect(rest.body.errors).toEqual(expected);
+
+		const graphql = await requestGraphQL(api.url, false, UNRESOLVED_RELATIONAL, {
+			query: { [PARENTS]: { name: true } },
+		});
+
+		expect(graphql.body.data?.[PARENTS] ?? null).toBeNull();
+
+		expect(
+			graphql.body.errors.map((error: { message: string; extensions: unknown }) => ({
+				message: error.message,
+				extensions: error.extensions,
+			}))
+		).toEqual(expected);
+	});
+
+	test('apply a tenant rule when the whole GraphQL filter variable is left out', async ({ api }) => {
+		const response = await request(api.url)
+			.post('/graphql')
+			.set('Authorization', `Bearer ${TENANT_A}`)
+			.send({ query: `query ($filter: ${CODES}_filter) { ${CODES}(filter: $filter) { code } }` });
+
+		expect(response.body.errors).toBeUndefined();
+		expect(codes(response.body.data[CODES])).toEqual(sorted(['Tenant-A-1', 'tenant-a-2']));
+	});
+
+	for (const operator of ['_starts_with', '_istarts_with']) {
+		test(`refuse a tenant's ${operator} filter whose GraphQL variable is left out`, async ({ api }) => {
+			const response = await request(api.url)
+				.post('/graphql')
+				.set('Authorization', `Bearer ${TENANT_A}`)
+				.send({ query: `query ($prefix: String) { ${CODES}(filter: { code: { ${operator}: $prefix } }) { code } }` });
+
+			expect(response.body.data?.[CODES] ?? null).toBeNull();
+
+			expect(
+				response.body.errors.map((error: { message: string; extensions: unknown }) => ({
+					message: error.message,
+					extensions: error.extensions,
+				}))
+			).toEqual(invalidQuery(`The filter value for "${operator}" has to be a string, number, or boolean`));
+		});
+	}
 });
+
+describe('Case-insensitive starts and ends operators across a relation', () => {
+	for (const [label, filter, expected] of [
+		['_some with _istarts_with', { _some: { code: { _istarts_with: 'TENANT-A' } } }, ['mixed']],
+		['_none with _istarts_with', { _none: { code: { _istarts_with: 'TENANT-A' } } }, ['b', 'empty']],
+		['_some with _nistarts_with', { _some: { code: { _nistarts_with: 'tenant-a' } } }, ['b', 'mixed']],
+		['_some with _iends_with', { _some: { code: { _iends_with: '-2' } } }, ['b']],
+	] as const) {
+		test(`return exactly the parents matching ${label}`, async ({ api }) => {
+			const response = await request(api.url)
+				.get(`/items/${PARENTS}`)
+				.query({ fields: 'name', filter: JSON.stringify({ children: filter }) })
+				.set('Authorization', ADMIN);
+
+			expect(response.statusCode).toBe(200);
+			expect(response.body.data.map((item: { name: string }) => item.name).sort()).toEqual(sorted([...expected]));
+		});
+	}
+});
+
+describeForVendors(
+	'Case-insensitive operators on text containing NUL',
+	['sqlite'],
+	`SQLite's LIKE stops at NUL, which the comparison has to avoid. PostgreSQL text can't contain NUL.`,
+	() => {
+		for (const [label, rule, expected] of [
+			['_istarts_with note', { _istarts_with: 'note' }, ['n1', 'n2', 'n3']],
+			['_nistarts_with note', { _nistarts_with: 'note' }, ['n4', 'n5']],
+			['_iends_with note', { _iends_with: 'note' }, ['n3', 'n4']],
+			['_niends_with note', { _niends_with: 'note' }, ['n1', 'n2', 'n5']],
+			['_iends_with tail', { _iends_with: 'tail' }, ['n1', 'n2']],
+			['_istarts_with with a NUL in the value', { _istarts_with: `NOTE${NUL}t` }, ['n1', 'n2']],
+		] as const) {
+			test(`${label} compares the whole stored value`, async ({ api }) => {
+				const response = await request(api.url)
+					.get(`/items/${CODES}`)
+					.query({ fields: 'label', filter: JSON.stringify({ _and: [{ kind: { _eq: 'nul' } }, { code: rule }] }) })
+					.set('Authorization', ADMIN);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.map((item: { label: string }) => item.label).sort()).toEqual([...expected]);
+			});
+		}
+	}
+);
+
+type ColumnCase = [column: string, kind: string, operator: string, operand: string, expected: readonly string[]];
+
+function testColumnCases(cases: readonly ColumnCase[]) {
+	for (const [column, kind, operator, operand, expected] of cases) {
+		test(`${operator} ${JSON.stringify(operand)} on the ${column} column matches its own text`, async ({ api }) => {
+			const response = await readCodes(api, USER.ADMIN!.TOKEN, {
+				_and: [{ kind: { _eq: kind } }, { [column]: { [operator]: operand } }],
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(codes(response.body.data)).toEqual(sorted([...expected]));
+		});
+	}
+}
+
+describeForVendors(
+	'Case-insensitive operators on a fixed-width column',
+	['postgres', 'mysql', 'maria'],
+	'SQLite has no fixed-width character type.',
+	() => {
+		testColumnCases([
+			['fixed', 'fixed', '_iends_with', 'c', ['ABC', 'XYC']],
+			['fixed', 'fixed', '_niends_with', 'c', ['abd']],
+		]);
+	}
+);
+
+describeForVendors(
+	'Case-insensitive operators on a column with the C collation',
+	['postgres'],
+	'The C collation is a PostgreSQL column collation.',
+	() => {
+		testColumnCases([
+			['ccode', 'accent', '_istarts_with', ECOLE, [`${ECOLE}-1`]],
+			['ccode', 'accent', '_nistarts_with', ECOLE, ['Xcole-1', `caf${E_ACUTE}`, 'cafx']],
+		]);
+	}
+);
+
+describeForVendors(
+	'Case-insensitive operators on a nondeterministic collation',
+	['postgres18'],
+	'PostgreSQL 18 is the supported engine line whose LIKE accepts a nondeterministic collation.',
+	() => {
+		testColumnCases([
+			['ncode', 'accent', '_istarts_with', ECOLE, [`${ECOLE}-1`]],
+			['ncode', 'accent', '_nistarts_with', ECOLE, ['Xcole-1', `caf${E_ACUTE}`, 'cafx']],
+		]);
+	}
+);
+
+describeForVendors(
+	`Case-insensitive operators under the column's own collation`,
+	['mysql', 'maria'],
+	'The Turkish and accent-insensitive column collations are MySQL and MariaDB column definitions.',
+	() => {
+		testColumnCases([
+			['trcode', 'turkish', '_istarts_with', 'I', ['Istanbul-1']],
+			['trcode', 'turkish', '_istarts_with', 'i', ['istanbul-2']],
+			['trcode', 'turkish', '_nistarts_with', 'I', ['Xstanbul-1', 'istanbul-2']],
+			['aicode', 'accent', '_istarts_with', 'e', [`${ECOLE}-1`]],
+			['aicode', 'accent', '_nistarts_with', 'e', ['Xcole-1', `caf${E_ACUTE}`, 'cafx']],
+		]);
+	}
+);
 
 describe('Case-insensitive operators in validation rules', () => {
 	for (const rule of VALIDATION) {
