@@ -1,7 +1,15 @@
 import type { Accountability, PrimaryKey } from '@cairncms/types';
-import { defineOperationApi, optionToObject, toArray } from '@cairncms/utils';
+import { defineOperationApi } from '@cairncms/utils';
 import { ItemsService } from '../../services/items.js';
 import { getAccountabilityForRole } from '../../utils/get-accountability-for-role.js';
+import {
+	decodeQueryOption,
+	readStoredTargets,
+	requireFilterCondition,
+	requireQuerySelection,
+	resolveKeySelection,
+	type StoredTargets,
+} from '../../utils/operation-targets.js';
 import { sanitizeQuery } from '../../utils/sanitize-query.js';
 
 type Options = {
@@ -15,7 +23,25 @@ type Options = {
 export default defineOperationApi<Options>({
 	id: 'item-delete',
 
-	handler: async ({ collection, key, query, emitEvents, permissions }, { accountability, database, getSchema }) => {
+	handler: async ({ collection, key, query, emitEvents, permissions }, context) => {
+		const { accountability, database, getSchema } = context;
+
+		const targets =
+			(context as { storedTargets?: StoredTargets }).storedTargets ?? readStoredTargets('item-delete', { key, query });
+
+		let keys: unknown[] | undefined;
+		let queryObject: Record<string, any> = {};
+		let filterOnly = false;
+
+		if (targets.key === 'configured') {
+			keys = resolveKeySelection(key);
+			if (keys.length === 0) return [];
+		} else {
+			const decoded = decodeQueryOption(query, targets.query);
+			({ filterOnly } = requireQuerySelection(decoded));
+			queryObject = decoded as Record<string, any>;
+		}
+
 		const schema = await getSchema({ database });
 		let customAccountability: Accountability | null;
 
@@ -30,28 +56,29 @@ export default defineOperationApi<Options>({
 		}
 
 		const itemsService: ItemsService = new ItemsService(collection, {
-			schema: await getSchema({ database }),
+			schema,
 			accountability: customAccountability,
 			knex: database,
 		});
 
-		const queryObject = query ? optionToObject(query) : {};
-		const sanitizedQueryObject = sanitizeQuery(queryObject, customAccountability);
-
-		let result: PrimaryKey | PrimaryKey[] | null;
-
-		if (!key || (Array.isArray(key) && key.length === 0)) {
-			result = await itemsService.deleteByQuery(sanitizedQueryObject, { emitEvents: !!emitEvents });
-		} else {
-			const keys = toArray(key);
-
+		if (keys) {
 			if (keys.length === 1) {
-				result = await itemsService.deleteOne(keys[0]!, { emitEvents: !!emitEvents });
-			} else {
-				result = await itemsService.deleteMany(keys, { emitEvents: !!emitEvents });
+				return await itemsService.deleteOne(keys[0] as PrimaryKey, { emitEvents: !!emitEvents });
 			}
+
+			return await itemsService.deleteMany(keys as PrimaryKey[], { emitEvents: !!emitEvents });
 		}
 
-		return result;
+		const sanitizedQueryObject = sanitizeQuery(queryObject, customAccountability);
+
+		if (filterOnly) {
+			await requireFilterCondition(collection, sanitizedQueryObject.filter, {
+				schema,
+				accountability: customAccountability,
+				knex: database,
+			});
+		}
+
+		return await itemsService.deleteByQuery(sanitizedQueryObject, { emitEvents: !!emitEvents });
 	},
 });

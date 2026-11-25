@@ -54,6 +54,60 @@ for (const mode of ['identity', 'setup', 'body'])
 		}
 	});
 
+for (const [mode, failure] of [
+	['clean', null],
+	['readiness', /The flow registry did not become ready/],
+	['unfinished', /finished 0 of 1 declared runs/],
+	['truthy-async', /finished 0 of 1 declared runs/],
+	['failure', /CONTROL_FLOW_ASSERTION/],
+	['cleanup-error', /has an unrecognized shape: its data is not JSON/],
+	['reinstall-unfinished', /installing flows failed: .*cannot be replaced yet/],
+	['duplicate-revision', /reading run records failed: .*has more than one detail record/],
+])
+	test(`flow fixture cleanup ${mode}`, { timeout: 180000 }, async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'cairn-flow-cleanup-'));
+
+		const run = startControl(['harness/vendor.mjs'], {
+			env: {
+				CONTROL_FLOW_CLEANUP: mode,
+				INTEGRATION_OPTIONS: JSON.stringify({
+					vendor: 'sqlite3',
+					directory,
+					filters: ['flow-cleanup.case.ts'],
+					collectAll: true,
+					configFile: join(integrationRoot, 'harness/controls.config.ts'),
+				}),
+			},
+		});
+
+		try {
+			const code = failure ? 1 : 0;
+			assert.equal(await run.done, code, run.output());
+			const result = await readVendorResult(join(directory, 'sqlite3'), code);
+			assert.equal(result.fileErrors.length, 0, JSON.stringify(result));
+
+			if (failure) {
+				assert.equal(result.passed, 0, JSON.stringify(result));
+				assert.equal(result.failures.length, 1, JSON.stringify(result));
+				assert.equal(result.blocked.length, 1, JSON.stringify(result));
+				assert.match(run.output(), failure);
+				assert.match(run.output(), /Flow fixture stopped the API/);
+				assert.doesNotMatch(run.output(), /^CONTROL_FLOW_DEPENDENT_BODY$/m);
+				assert.match(run.output(), /^CONTROL_FLOW_ROWS_UNCHANGED=true$/m);
+				if (mode === 'reinstall-unfinished') assert.doesNotMatch(run.output(), /finished \d+ of \d+ declared runs/);
+			} else {
+				assert.equal(result.passed, 2, JSON.stringify(result));
+				assert.match(run.output(), /^CONTROL_FLOW_DEPENDENT_BODY$/m);
+				assert.doesNotMatch(run.output(), /Flow fixture stopped the API/);
+			}
+
+			await assertReleased(join(directory, 'sqlite3'));
+		} finally {
+			await run.stop();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
 for (const [name, vendor, count] of [
 	['cli', 'sqlite3', 3],
 	['origin', 'sqlite3', 2],

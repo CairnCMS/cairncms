@@ -1,0 +1,242 @@
+[
+	{
+		"id": "90dfa209-1fba-4b5c-bed6-c4eccd54cd48",
+		"name": "Event after read",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "action",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_read"]
+		},
+		"operation": "e529b003-10ec-403d-b1d2-42c4adbb36cc",
+		"operations": [
+			{
+				"id": "e529b003-10ec-403d-b1d2-42c4adbb36cc",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_read",
+					"key": "{{ $trigger.key }}",
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "9fe4122a-2823-4b53-a471-aa174b66843a",
+		"name": "Event after batch",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "action",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_batch"]
+		},
+		"operation": "5bc5882a-c27b-4468-ad07-521eebe742c4",
+		"operations": [
+			{
+				"id": "5bc5882a-c27b-4468-ad07-521eebe742c4",
+				"name": null,
+				"key": "seen",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"seen": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "4faa61e1-116b-4f71-a8f5-e74ed5c3298d",
+		"name": "Event after update",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "action",
+			"scope": ["items.update"],
+			"collections": ["test_flow_events_update"]
+		},
+		"operation": "09f090a2-8a4b-4a4f-b05f-75b421c3fef1",
+		"operations": [
+			{
+				"id": "09f090a2-8a4b-4a4f-b05f-75b421c3fef1",
+				"name": null,
+				"key": "seen",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"seen": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "85befd9d-b0c2-45d6-91b9-3ab66b97ed9d",
+		"name": "Event replace",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_replace"],
+			"return": "$last"
+		},
+		"operation": "92ecd5e1-86eb-4097-9e57-77d1d60c6ee9",
+		"operations": [
+			{
+				"id": "92ecd5e1-86eb-4097-9e57-77d1d60c6ee9",
+				"name": null,
+				"key": "replace",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"name": "replaced"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "e61669e7-f9fe-4ad9-b51a-7a3c8fd746b2",
+		"name": "Event condition refusal",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_condition"]
+		},
+		"operation": "89d52a75-6290-4663-8402-24d781398663",
+		"operations": [
+			{
+				"id": "89d52a75-6290-4663-8402-24d781398663",
+				"name": null,
+				"key": "gate",
+				"type": "condition",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"filter": {
+						"$trigger": {
+							"payload": {
+								"refusal_marker": {
+									"_eq": "allowed"
+								}
+							}
+						}
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "1aba08f3-43f1-44a9-b513-93a5ba834bdb",
+		"name": "Event forbidden",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_source"]
+		},
+		"operation": "67fe3366-0811-4b38-a5eb-46b229a86e5a",
+		"operations": [
+			{
+				"id": "67fe3366-0811-4b38-a5eb-46b229a86e5a",
+				"name": null,
+				"key": "copy",
+				"type": "item-create",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_target",
+					"payload": {
+						"name": "{{ $trigger.payload.name }}"
+					},
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "2832580c-f51b-4949-8f32-6455223f4e3d",
+		"name": "Event script refusal",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.update"],
+			"collections": ["test_flow_events_script"]
+		},
+		"operation": "4c1f1c87-d979-4f75-a535-4b81a5d5f3b6",
+		"operations": [
+			{
+				"id": "4c1f1c87-d979-4f75-a535-4b81a5d5f3b6",
+				"name": null,
+				"key": "refuse",
+				"type": "exec",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"code": "module.exports = async function () {\n\tconsole.log('flow-event-script-reached-throw');\n\tthrow new Error('Refused by the flow');\n};"
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]

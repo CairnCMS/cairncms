@@ -1,0 +1,144 @@
+[
+	{
+		"id": "87641baf-42c7-4789-868d-f4ca730de0ed",
+		"name": "Tracking all",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "0841280f-a0f5-4de3-8ade-83bc5a88b48f",
+		"operations": [
+			{
+				"id": "0841280f-a0f5-4de3-8ade-83bc5a88b48f",
+				"name": null,
+				"key": "first",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"first": true,
+						"echo": "{{ $trigger.headers.authorization }}"
+					}
+				},
+				"resolve": "0a434c7f-bf01-40b3-a05d-976d3061eb2e",
+				"reject": null
+			},
+			{
+				"id": "0a434c7f-bf01-40b3-a05d-976d3061eb2e",
+				"name": null,
+				"key": "second",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"second": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "23f40c6a-6f90-4d59-b570-13d413e91891",
+		"name": "Tracking activity",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "activity",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "2b654fb0-54f7-4b1c-bee5-557de9a63251",
+		"operations": [
+			{
+				"id": "2b654fb0-54f7-4b1c-bee5-557de9a63251",
+				"name": null,
+				"key": "first",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"first": true
+					}
+				},
+				"resolve": "19fec912-2759-46f5-8e5e-ae5e71b2a181",
+				"reject": null
+			},
+			{
+				"id": "19fec912-2759-46f5-8e5e-ae5e71b2a181",
+				"name": null,
+				"key": "second",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"second": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "7070e829-ab57-40e4-960b-679e592c6cb2",
+		"name": "Tracking none",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": null,
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "463c9204-e92c-4c8e-affb-cf13918d4ed1",
+		"operations": [
+			{
+				"id": "463c9204-e92c-4c8e-affb-cf13918d4ed1",
+				"name": null,
+				"key": "first",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"first": true
+					}
+				},
+				"resolve": "cd42aec0-3aa2-4451-90cf-c10e33716bf0",
+				"reject": null
+			},
+			{
+				"id": "cd42aec0-3aa2-4451-90cf-c10e33716bf0",
+				"name": null,
+				"key": "second",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"second": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]

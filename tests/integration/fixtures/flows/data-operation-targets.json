@@ -1,0 +1,124 @@
+[
+	{
+		"id": "30836ba2-d0cb-42af-b13e-cab4ba446939",
+		"name": "Targets update",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": { "method": "POST", "return": "$last", "cacheEnabled": false },
+		"operation": "d1e856bc-6885-4136-b5b3-7a6831b38808",
+		"operations": [
+			{
+				"id": "d1e856bc-6885-4136-b5b3-7a6831b38808",
+				"name": null,
+				"key": "update",
+				"type": "item-update",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_targets",
+					"permissions": "$full",
+					"emitEvents": true,
+					"key": "{{ $trigger.body.ids }}",
+					"payload": { "name": "{{ $trigger.body.marker }}" }
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "9a660bc6-b45c-4c6b-82f3-d8287a8e2c30",
+		"name": "Targets delete",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": { "method": "POST", "return": "$last", "cacheEnabled": false },
+		"operation": "cd7ecbda-9f18-4fea-9a97-ef9c10789b9a",
+		"operations": [
+			{
+				"id": "cd7ecbda-9f18-4fea-9a97-ef9c10789b9a",
+				"name": null,
+				"key": "delete",
+				"type": "item-delete",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_targets",
+					"permissions": "$full",
+					"emitEvents": false,
+					"key": "{{ $trigger.body.ids }}"
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "896f7a74-1827-4f85-9485-45760706f2b4",
+		"name": "Targets read",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": { "method": "GET", "return": "$last", "cacheEnabled": false },
+		"operation": "b299b177-9f5a-461f-9465-80cf2ace053a",
+		"operations": [
+			{
+				"id": "b299b177-9f5a-461f-9465-80cf2ace053a",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_targets",
+					"permissions": "$full",
+					"emitEvents": false,
+					"key": "{{ $trigger.query.id }}"
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "eecb2b11-20de-4025-b2b4-562a18f62268",
+		"name": "Targets blocking create",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": { "type": "filter", "scope": ["items.create"], "collections": ["test_flow_targets_children"] },
+		"operation": "e9bc81a8-e00b-4485-a3f9-0f1002275230",
+		"operations": [
+			{
+				"id": "e9bc81a8-e00b-4485-a3f9-0f1002275230",
+				"name": null,
+				"key": "touch_parent",
+				"type": "item-update",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_targets_parents",
+					"permissions": "$full",
+					"emitEvents": false,
+					"key": "{{ $trigger.payload.parent_ids }}",
+					"payload": { "name": "touched" }
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]

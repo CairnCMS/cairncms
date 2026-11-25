@@ -1,0 +1,364 @@
+/* eslint-disable no-console */
+import type { Fixtures } from '@vitest/runner';
+import type { FlowRaw, OperationRaw, TriggerType } from '@cairncms/types';
+import type { Knex } from 'knex';
+import { randomUUID } from 'node:crypto';
+import type { Response } from 'supertest';
+import { createApiTest, type Api } from './environment';
+import { readActivityBaseline, readFinishedRuns, readRuns, type RunView } from './flow-outcomes';
+import request, { setupRequest } from './request';
+import { sleep } from '../utils/sleep';
+
+export type OperationDefinition = Omit<OperationRaw, 'flow' | 'date_created' | 'user_created'>;
+
+export type FlowDefinition = Omit<FlowRaw, 'operations' | 'date_created' | 'user_created'> & {
+	operations: OperationDefinition[];
+};
+
+/** A flow as a JSON import types it: the literal unions widen to strings, and every other field stays checked. */
+export type FlowJson = Omit<FlowDefinition, 'status' | 'trigger' | 'accountability'> & {
+	status: string;
+	trigger: string | null;
+	accountability: string | null;
+};
+
+const STATUSES: readonly FlowRaw['status'][] = ['active', 'inactive'];
+const TRIGGERS: readonly TriggerType[] = ['event', 'schedule', 'operation', 'webhook', 'manual'];
+const ACCOUNTABILITIES: readonly NonNullable<FlowRaw['accountability']>[] = ['all', 'activity'];
+
+function isOneOf<T extends string>(values: readonly T[], value: unknown): value is T {
+	return (values as readonly unknown[]).includes(value);
+}
+
+/** Narrows imported JSON definitions to `FlowDefinition` before anything is installed, and returns a fresh copy. */
+export function defineFlows(source: string, json: FlowJson | FlowJson[]): FlowDefinition[] {
+	return (Array.isArray(json) ? json : [json]).map((flow) => {
+		const { status, trigger, accountability } = flow;
+
+		const invalid = (field: string, value: unknown) =>
+			new Error(`${source}: flow ${flow.id} has an invalid ${field}: ${JSON.stringify(value)}`);
+
+		if (!isOneOf(STATUSES, status)) throw invalid('status', status);
+		if (trigger !== null && !isOneOf(TRIGGERS, trigger)) throw invalid('trigger', trigger);
+		if (accountability !== null && !isOneOf(ACCOUNTABILITIES, accountability))
+			throw invalid('accountability', accountability);
+
+		return structuredClone({ ...flow, status, trigger, accountability });
+	});
+}
+
+export type FlowFixture = {
+	/** Highest activity id when the case began. Only run records above it belong to the case. */
+	readonly baseline: number;
+	/**
+	 * Stores the definitions, then waits until the API has loaded them. Refuses to replace a background flow until
+	 * every run the case declared for it has finished.
+	 */
+	install: (definitions: FlowDefinition[]) => Promise<void>;
+	/** Records that the case started background runs of an installed flow. */
+	started: (flowId: string, count?: number) => void;
+	/** Reads the finished runs of a flow since the case last installed it. */
+	runs: (flowId: string) => Promise<RunView[]>;
+	/**
+	 * Waits until every run the case declared for a background flow has its final record, then returns the runs since
+	 * the case last installed the flow.
+	 */
+	finished: (flowId: string) => Promise<RunView[]>;
+};
+
+export const SENTINEL_FLOW = '6f1d3c2a-8b4e-4f7a-9c1d-2e5b8a7f0c31';
+
+const SENTINEL_STEP = '0b9e7d4c-3a2f-4e1b-8d6c-5f4a3b2c1d0e';
+const READY_DEADLINE_MS = 5000;
+const FINISHED_DEADLINE_MS = 10000;
+const POLL_INTERVAL_MS = 25;
+
+/** The webhook whose returned marker shows which stored definitions the API has loaded. */
+function sentinelDefinition(marker: string): FlowDefinition {
+	return {
+		id: SENTINEL_FLOW,
+		name: 'Flow fixture sentinel',
+		icon: null,
+		color: null,
+		description: null,
+		status: 'active',
+		trigger: 'webhook',
+		accountability: null,
+		options: { method: 'GET', cacheEnabled: false },
+		operation: SENTINEL_STEP,
+		operations: [
+			{
+				id: SENTINEL_STEP,
+				name: null,
+				key: 'sentinel',
+				type: 'transform',
+				position_x: 1,
+				position_y: 1,
+				options: { json: { marker } },
+				resolve: null,
+				reject: null,
+			},
+		],
+	};
+}
+
+/** Whether a flow can still be running after the request or event that started it has returned. */
+function runsInBackground(flow: FlowDefinition): boolean {
+	if (flow.trigger === 'event') return flow.options?.['type'] !== 'filter';
+	if (flow.trigger === 'webhook' || flow.trigger === 'manual') return Boolean(flow.options?.['async']);
+	return flow.trigger === 'operation';
+}
+
+function validate(flow: FlowDefinition): void {
+	if (flow.id === SENTINEL_FLOW) throw new Error('The flow fixture owns the sentinel definition');
+	if (flow.trigger === 'schedule')
+		throw new Error(`Flow ${flow.id} uses a schedule, which the flow fixture does not install`);
+
+	if (runsInBackground(flow) && flow.accountability !== 'all')
+		throw new Error(`Flow ${flow.id} can run in the background, so it must record full run detail`);
+
+	const steps = new Set(flow.operations.map((operation) => operation.id));
+
+	for (const target of [
+		flow.operation,
+		...flow.operations.flatMap((operation) => [operation.resolve, operation.reject]),
+	])
+		if (target !== null && !steps.has(target)) throw new Error(`Flow ${flow.id} links to missing step ${target}`);
+}
+
+/** Inserts flows, then their steps, then the links between steps, then each flow's entry step. */
+async function seedFlows(trx: Knex.Transaction, definitions: FlowDefinition[]): Promise<void> {
+	await trx('directus_flows').insert(
+		definitions.map((flow) => ({
+			id: flow.id,
+			name: flow.name,
+			icon: flow.icon,
+			color: flow.color,
+			description: flow.description,
+			status: flow.status,
+			trigger: flow.trigger,
+			accountability: flow.accountability,
+			options: JSON.stringify(flow.options ?? {}),
+			operation: null,
+		}))
+	);
+
+	const operations = definitions.flatMap((flow) => flow.operations.map((operation) => ({ flow, operation })));
+
+	if (operations.length > 0)
+		await trx('directus_operations').insert(
+			operations.map(({ flow, operation }) => ({
+				id: operation.id,
+				name: operation.name,
+				key: operation.key,
+				type: operation.type,
+				position_x: operation.position_x,
+				position_y: operation.position_y,
+				options: JSON.stringify(operation.options ?? {}),
+				resolve: null,
+				reject: null,
+				flow: flow.id,
+			}))
+		);
+
+	for (const { operation } of operations)
+		if (operation.resolve !== null || operation.reject !== null)
+			await trx('directus_operations')
+				.where('id', operation.id)
+				.update({ resolve: operation.resolve, reject: operation.reject });
+
+	for (const flow of definitions)
+		if (flow.operation !== null) await trx('directus_flows').where('id', flow.id).update({ operation: flow.operation });
+}
+
+/** Clears the links between steps and the entry steps before deleting, so the cascade never meets a live reference. */
+async function removeFlows(trx: Knex.Transaction, ids: string[]): Promise<void> {
+	if (ids.length === 0) return;
+	await trx('directus_operations').whereIn('flow', ids).update({ resolve: null, reject: null });
+	await trx('directus_flows').whereIn('id', ids).update({ operation: null });
+	await trx('directus_flows').whereIn('id', ids).del();
+}
+
+/** Polls the sentinel until it returns the marker, which only a reload of the current definitions can register. */
+async function waitForMarker(api: Api, marker: string): Promise<void> {
+	const deadline = performance.now() + READY_DEADLINE_MS;
+	let last: Response | undefined;
+	let cause: unknown;
+
+	try {
+		while (performance.now() < deadline) {
+			last = await request(api.url)
+				.get(`/flows/trigger/${SENTINEL_FLOW}`)
+				.timeout({ deadline: Math.max(1, deadline - performance.now()) });
+
+			if (last.status === 200 && last.body?.marker === marker) return;
+			if (![200, 403].includes(last.status)) break;
+			await sleep(POLL_INTERVAL_MS);
+		}
+	} catch (error) {
+		cause = error;
+	}
+
+	throw new Error(
+		`The flow registry did not become ready: ${JSON.stringify({
+			status: last?.status,
+			body: last?.body,
+			error: cause instanceof Error ? cause.message : cause,
+		})}`,
+		{ cause }
+	);
+}
+
+/** Changes the sentinel's marker through one API save, which queues exactly one reload, then waits for it. */
+async function reloadRegistry(api: Api): Promise<void> {
+	const marker = randomUUID();
+
+	await setupRequest(api.url)
+		.patch(`/operations/${SENTINEL_STEP}`)
+		.set('Authorization', `Bearer ${api.adminToken}`)
+		.send({ options: { json: { marker } } });
+
+	await waitForMarker(api, marker);
+}
+
+function describe(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+export const flowFixtures: Fixtures<{ flows: FlowFixture }, { api: Api; available: void }> = {
+	flows: async ({ api, available, task, onTestFinished }, use) => {
+		void available;
+
+		const installed = new Set<string>();
+		const background = new Set<string>();
+		const declared = new Map<string, number>();
+		const installedAfter = new Map<string, number>();
+		let uncertain: string | undefined;
+		let stopped: Error | undefined;
+
+		onTestFinished(() => {
+			if (stopped) throw stopped;
+		});
+
+		if (!(await api.database('directus_flows').where('id', SENTINEL_FLOW).first()))
+			await api.database.transaction((trx) => seedFlows(trx, [sentinelDefinition(randomUUID())]));
+
+		const baseline = await readActivityBaseline(api.database);
+
+		/** Refuses to replace a background flow while a run the case declared for it may still record. */
+		async function assertReplaceable(flowId: string): Promise<void> {
+			if (!background.has(flowId)) return;
+			const expected = declared.get(flowId) ?? 0;
+			const finished = (await readFinishedRuns(api.database, flowId, { after: baseline })).length;
+
+			if (finished !== expected)
+				throw new Error(
+					`Flow ${flowId} cannot be replaced yet: ${finished} of its ${expected} declared runs have finished`
+				);
+		}
+
+		async function readInstalledRuns(flowId: string): Promise<RunView[]> {
+			const after = installedAfter.get(flowId);
+			if (after === undefined) throw new Error(`Flow ${flowId} was not installed by this case`);
+			return readRuns(api.database, flowId, { after });
+		}
+
+		const fixture: FlowFixture = {
+			baseline,
+			async install(definitions) {
+				if (uncertain) throw new Error(`The flow registry is uncertain: ${uncertain}`);
+				for (const flow of definitions) validate(flow);
+
+				try {
+					for (const flow of definitions) await assertReplaceable(flow.id);
+					const after = await readActivityBaseline(api.database);
+
+					await api.database.transaction(async (trx) => {
+						await removeFlows(
+							trx,
+							definitions.map((flow) => flow.id)
+						);
+
+						await seedFlows(trx, definitions);
+					});
+
+					for (const flow of definitions) {
+						installed.add(flow.id);
+						installedAfter.set(flow.id, after);
+						if (runsInBackground(flow)) background.add(flow.id);
+					}
+
+					await reloadRegistry(api);
+				} catch (error) {
+					uncertain = `installing flows failed: ${describe(error)}`;
+					throw error;
+				}
+			},
+			started(flowId, count = 1) {
+				if (!background.has(flowId)) throw new Error(`Flow ${flowId} is not an installed background flow`);
+				declared.set(flowId, (declared.get(flowId) ?? 0) + count);
+			},
+			runs: readInstalledRuns,
+			async finished(flowId) {
+				const expected = declared.get(flowId) ?? 0;
+				if (expected === 0) throw new Error(`No runs of flow ${flowId} were declared as started`);
+				const deadline = performance.now() + FINISHED_DEADLINE_MS;
+
+				for (;;) {
+					const finished = (await readFinishedRuns(api.database, flowId, { after: baseline })).length;
+
+					if (finished > expected)
+						throw new Error(`Flow ${flowId} finished ${finished} runs, but the case declared ${expected}`);
+
+					if (finished === expected) return readInstalledRuns(flowId);
+
+					if (performance.now() >= deadline)
+						throw new Error(`Flow ${flowId} finished ${finished} of ${expected} declared runs`);
+
+					await sleep(POLL_INTERVAL_MS);
+				}
+			},
+		};
+
+		await use(fixture);
+
+		const reasons: string[] = [];
+		if (uncertain) reasons.push(uncertain);
+		if (task.result?.state === 'fail') reasons.push('the case failed');
+
+		if (reasons.length === 0) {
+			try {
+				for (const flowId of background) {
+					const runs = await readFinishedRuns(api.database, flowId, { after: baseline });
+					const expected = declared.get(flowId) ?? 0;
+					if (runs.length !== expected)
+						reasons.push(`flow ${flowId} finished ${runs.length} of ${expected} declared runs`);
+				}
+			} catch (error) {
+				reasons.push(`reading run records failed: ${describe(error)}`);
+			}
+		}
+
+		if (reasons.length === 0 && installed.size > 0) {
+			try {
+				await api.database.transaction((trx) => removeFlows(trx, [...installed]));
+				await reloadRegistry(api);
+			} catch (error) {
+				reasons.push(`cleanup failed: ${describe(error)}`);
+			}
+		}
+
+		if (reasons.length === 0) return;
+
+		console.error(`Flow fixture stopped the API after "${task.name}": ${reasons.join(', ')}`);
+		stopped = new Error(`Flow fixture stopped the API: ${reasons.join(', ')}`);
+
+		try {
+			if (api.available()) await api.stop(api.child);
+		} catch (error) {
+			stopped = new Error(`${stopped.message}, and stopping it failed: ${describe(error)}`, { cause: error });
+		}
+	},
+};
+
+export const flowTest = createApiTest().extend(flowFixtures);
