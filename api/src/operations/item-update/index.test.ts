@@ -1,3 +1,4 @@
+import knexLib from 'knex';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('../../services/items.js', () => {
@@ -13,6 +14,7 @@ vi.mock('../../utils/get-accountability-for-role.js', () => ({
 }));
 
 import { ItemsService } from '../../services/items.js';
+import { getAccountabilityForRole } from '../../utils/get-accountability-for-role.js';
 import config from './index.js';
 
 const testCollection = 'test';
@@ -35,7 +37,7 @@ describe('Operations / Item Update', () => {
 		{ permissions: 'test', expected: 'test' },
 	])('accountability for permissions "$permissions" should be $expected', async ({ permissions, expected }) => {
 		await config.handler(
-			{ collection: testCollection, payload: testPayload, permissions } as any,
+			{ collection: testCollection, payload: testPayload, key: 1, permissions } as any,
 			{ accountability: testAccountability, getSchema } as any
 		);
 
@@ -160,5 +162,192 @@ describe('Operations / Item Update', () => {
 		);
 
 		expect(vi.mocked(ItemsService).prototype.updateMany).toHaveBeenCalledWith(keys, testPayload, { emitEvents: false });
+	});
+});
+
+describe('Operations / Item Update / targets', () => {
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	const keysMode = { storedTargets: { key: 'configured', query: 'none' } };
+	const queryMode = { storedTargets: { key: 'none', query: 'configured' } };
+
+	function run(options: Record<string, unknown>, context: Record<string, unknown> = {}) {
+		return config.handler(
+			{ collection: testCollection, payload: testPayload, permissions: '$full', ...options } as any,
+			{ accountability: testAccountability, getSchema, ...context } as any
+		);
+	}
+
+	function expectNothingRead() {
+		expect(getSchema).not.toHaveBeenCalled();
+		expect(vi.mocked(getAccountabilityForRole)).not.toHaveBeenCalled();
+		expect(vi.mocked(ItemsService).prototype.updateOne).not.toHaveBeenCalled();
+		expect(vi.mocked(ItemsService).prototype.updateMany).not.toHaveBeenCalled();
+		expect(vi.mocked(ItemsService).prototype.updateByQuery).not.toHaveBeenCalled();
+	}
+
+	test.each([{ key: [] }, { key: [[]] }])(
+		'returns [] for the empty list $key without reading anything',
+		async ({ key }) => {
+			await expect(run({ key }, keysMode)).resolves.toEqual([]);
+			expectNothingRead();
+		}
+	);
+
+	test.each([
+		{ key: null },
+		{ key: '' },
+		{ key: [null] },
+		{ key: [''] },
+		{ key: true },
+		{ key: {} },
+		{ key: NaN },
+		{ key: [true] },
+		{ key: [5, {}] },
+		{ key: [[true]] },
+		{ key: [[null]] },
+	])('refuses the keys $key with INVALID_PAYLOAD without reading anything', async ({ key }) => {
+		await expect(run({ key }, keysMode)).rejects.toMatchObject({ code: 'INVALID_PAYLOAD' });
+		expectNothingRead();
+	});
+
+	test.each([
+		{ key: [5, ''], method: 'updateMany', expected: [5, ''] },
+		{ key: ['undefined'], method: 'updateOne', expected: 'undefined' },
+		{ key: [[2, 3]], method: 'updateOne', expected: [2, 3] },
+		{ key: [[2, '']], method: 'updateOne', expected: [2, ''] },
+		{ key: 0, method: 'updateOne', expected: 0 },
+		{ key: [0], method: 'updateOne', expected: 0 },
+	])('passes the keys $key to $method', async ({ key, method, expected }) => {
+		await run({ key }, keysMode);
+
+		expect((vi.mocked(ItemsService).prototype as any)[method]).toHaveBeenCalledWith(
+			expected,
+			testPayload,
+			expect.anything()
+		);
+	});
+
+	test('returns null without a payload, before checking an empty key list', async () => {
+		await expect(run({ key: [], payload: undefined }, keysMode)).resolves.toBe(null);
+		expectNothingRead();
+	});
+
+	test.each([{ query: undefined }, { query: null }, { query: '' }, { query: '   ' }, { query: {} }])(
+		'refuses the blank query $query with INVALID_CONFIG without decoding it',
+		async ({ query }) => {
+			await expect(run({ query }, { storedTargets: { key: 'none', query: 'none' } })).rejects.toMatchObject({
+				code: 'INVALID_CONFIG',
+			});
+
+			expectNothingRead();
+		}
+	);
+
+	test.each([{ query: '' }, { query: '   ' }])(
+		'refuses a saved query that resolves to the blank text $query with INVALID_CONFIG',
+		async ({ query }) => {
+			await expect(run({ query }, queryMode)).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
+			expectNothingRead();
+		}
+	);
+
+	test.each([{ query: 'null' }, { query: { foo: 1 } }, { query: { sort: ['id'] } }, { query: { filter: {} } }])(
+		'refuses the query $query with INVALID_CONFIG without reading anything',
+		async ({ query }) => {
+			await expect(run({ query }, queryMode)).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
+			expectNothingRead();
+		}
+	);
+
+	test.each([
+		{ query: { limit: 'abc' } },
+		{ query: { limit: true } },
+		{ query: { limit: '' } },
+		{ query: { limit: 1.5 } },
+		{ query: { limit: -2 } },
+		{ query: { limit: 'abc', search: 'paid' } },
+	])('refuses the invalid limit in $query with INVALID_QUERY without reading anything', async ({ query }) => {
+		await expect(run({ query }, queryMode)).rejects.toMatchObject({ code: 'INVALID_QUERY' });
+		expectNothingRead();
+	});
+
+	test('keeps the keys path when the saved query is blank text', async () => {
+		await run({ key: [5], query: '   ' }, keysMode);
+		expect(vi.mocked(ItemsService).prototype.updateOne).toHaveBeenCalledWith(5, testPayload, expect.anything());
+	});
+
+	test.each([
+		{ query: { search: 'paid' } },
+		{ query: { limit: 2 } },
+		{ query: { limit: '2' } },
+		{ query: { limit: -1 } },
+	])('updates by the query $query', async ({ query }) => {
+		await run({ query }, queryMode);
+		expect(vi.mocked(ItemsService).prototype.updateByQuery).toHaveBeenCalledOnce();
+	});
+
+	describe('when the filter is the only selector', () => {
+		const field = (name: string, type: string) => ({
+			field: name,
+			type,
+			dbType: type,
+			nullable: true,
+			special: [],
+			defaultValue: null,
+			precision: null,
+			scale: null,
+			generated: false,
+			note: null,
+			alias: false,
+			validation: null,
+		});
+
+		const schema = {
+			collections: {
+				[testCollection]: {
+					collection: testCollection,
+					primary: 'id',
+					singleton: false,
+					note: null,
+					sortField: null,
+					accountability: 'all',
+					fields: { id: field('id', 'integer'), status: field('status', 'string') },
+				},
+			},
+			relations: [],
+		};
+
+		const context = {
+			...queryMode,
+			accountability: { admin: true, role: null, user: null },
+			database: knexLib({ client: 'pg' }),
+			getSchema: vi.fn().mockResolvedValue(schema),
+		};
+
+		test('updates when the builder turns the filter into a condition', async () => {
+			await run({ query: { filter: { id: { _eq: 1 } } }, permissions: '$trigger' }, context);
+			expect(vi.mocked(ItemsService).prototype.updateByQuery).toHaveBeenCalledOnce();
+		});
+
+		test('refuses before updating when the builder drops the filter', async () => {
+			await expect(run({ query: { filter: { _and: [] } }, permissions: '$trigger' }, context)).rejects.toMatchObject({
+				code: 'INVALID_CONFIG',
+			});
+
+			expect(vi.mocked(ItemsService).prototype.updateByQuery).not.toHaveBeenCalled();
+		});
+	});
+
+	test('a direct caller without stored targets reads an empty resolved key as query mode', async () => {
+		await run({ key: [], query: { limit: -1 } });
+		expect(vi.mocked(ItemsService).prototype.updateByQuery).toHaveBeenCalledOnce();
+	});
+
+	test('a direct caller without stored targets is refused keys and a query together', async () => {
+		await expect(run({ key: [5], query: { limit: 2 } })).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
+		expectNothingRead();
 	});
 });

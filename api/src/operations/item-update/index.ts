@@ -1,8 +1,16 @@
 import type { Accountability, PrimaryKey } from '@cairncms/types';
-import { defineOperationApi, optionToObject, toArray } from '@cairncms/utils';
+import { defineOperationApi, optionToObject } from '@cairncms/utils';
 import { ItemsService } from '../../services/items.js';
 import type { Item } from '../../types/index.js';
 import { getAccountabilityForRole } from '../../utils/get-accountability-for-role.js';
+import {
+	decodeQueryOption,
+	readStoredTargets,
+	requireFilterCondition,
+	requireQuerySelection,
+	resolveKeySelection,
+	type StoredTargets,
+} from '../../utils/operation-targets.js';
 import { sanitizeQuery } from '../../utils/sanitize-query.js';
 
 type Options = {
@@ -17,10 +25,31 @@ type Options = {
 export default defineOperationApi<Options>({
 	id: 'item-update',
 
-	handler: async (
-		{ collection, key, payload, query, emitEvents, permissions },
-		{ accountability, database, getSchema }
-	) => {
+	handler: async ({ collection, key, payload, query, emitEvents, permissions }, context) => {
+		const { accountability, database, getSchema } = context;
+
+		const targets =
+			(context as { storedTargets?: StoredTargets }).storedTargets ?? readStoredTargets('item-update', { key, query });
+
+		const payloadObject: Partial<Item> | Partial<Item>[] | null = optionToObject(payload) ?? null;
+
+		if (!payloadObject) {
+			return null;
+		}
+
+		let keys: unknown[] | undefined;
+		let queryObject: Record<string, any> = {};
+		let filterOnly = false;
+
+		if (targets.key === 'configured') {
+			keys = resolveKeySelection(key);
+			if (keys.length === 0) return [];
+		} else {
+			const decoded = decodeQueryOption(query, targets.query);
+			({ filterOnly } = requireQuerySelection(decoded));
+			queryObject = decoded as Record<string, any>;
+		}
+
 		const schema = await getSchema({ database });
 		let customAccountability: Accountability | null;
 
@@ -35,34 +64,29 @@ export default defineOperationApi<Options>({
 		}
 
 		const itemsService: ItemsService = new ItemsService(collection, {
-			schema: await getSchema({ database }),
+			schema,
 			accountability: customAccountability,
 			knex: database,
 		});
 
-		const payloadObject: Partial<Item> | Partial<Item>[] | null = optionToObject(payload) ?? null;
+		if (keys) {
+			if (keys.length === 1) {
+				return await itemsService.updateOne(keys[0] as PrimaryKey, payloadObject, { emitEvents: !!emitEvents });
+			}
 
-		const queryObject = query ? optionToObject(query) : {};
+			return await itemsService.updateMany(keys as PrimaryKey[], payloadObject, { emitEvents: !!emitEvents });
+		}
+
 		const sanitizedQueryObject = sanitizeQuery(queryObject, customAccountability);
 
-		if (!payloadObject) {
-			return null;
+		if (filterOnly) {
+			await requireFilterCondition(collection, sanitizedQueryObject.filter, {
+				schema,
+				accountability: customAccountability,
+				knex: database,
+			});
 		}
 
-		let result: PrimaryKey | PrimaryKey[] | null;
-
-		if (!key || (Array.isArray(key) && key.length === 0)) {
-			result = await itemsService.updateByQuery(sanitizedQueryObject, payloadObject, { emitEvents: !!emitEvents });
-		} else {
-			const keys = toArray(key);
-
-			if (keys.length === 1) {
-				result = await itemsService.updateOne(keys[0]!, payloadObject, { emitEvents: !!emitEvents });
-			} else {
-				result = await itemsService.updateMany(keys, payloadObject, { emitEvents: !!emitEvents });
-			}
-		}
-
-		return result;
+		return await itemsService.updateByQuery(sanitizedQueryObject, payloadObject, { emitEvents: !!emitEvents });
 	},
 });

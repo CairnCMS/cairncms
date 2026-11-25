@@ -26,6 +26,12 @@ import { AuthorizationService } from './services/authorization.js';
 import * as services from './services/index.js';
 import { FlowsService } from './services/flows.js';
 import { decryptOperationOptions, findUnencryptedSecretOptions } from './services/operation-option-secrets.js';
+import {
+	classifyStoredQueryColumn,
+	readStoredTargets,
+	type StoredQuery,
+	type StoredTargets,
+} from './utils/operation-targets.js';
 import { safeLogFragment } from './utils/safe-log-fragment.js';
 import { RevisionsService } from './services/revisions.js';
 import type { EventHandler } from './types/index.js';
@@ -91,6 +97,24 @@ export function getFlowManager(): FlowManager {
 }
 
 const REDACTING_BUILTIN_OPERATION_TYPES = new Set(['log', 'exec']);
+
+const TARGETING_BUILTIN_OPERATION_TYPES = new Set(['item-read', 'item-update', 'item-delete']);
+
+type StepFailure = { data: unknown; rejection?: { status: number; code: string; message: string } };
+
+/** Only a thrown BaseException supplies the status and code forwarded by a blocking flow. */
+function toStepFailure(error: unknown): StepFailure {
+	if (error instanceof BaseException) {
+		return {
+			data: { message: error.message, code: error.code, extensions: error.extensions, status: error.status },
+			rejection: { status: error.status, code: error.code, message: error.message },
+		};
+	}
+
+	if (error instanceof Error) return { data: { message: error.message } };
+	if (typeof error === 'string') return { data: isValidJSON(error) ? parseJSON(error) : error };
+	return { data: error ?? null };
+}
 
 function collectLeafValues(value: unknown, out: string[], seen: WeakSet<object>): void {
 	if (typeof value === 'string') {
@@ -177,6 +201,9 @@ class FlowManager {
 	// Confined operation descriptors, keyed by operation type. A null value marks an
 	// ambiguous type declared by more than one confined operation, which runs neither.
 	private confinedOperations: Map<string, ConfinedOperationDescriptor | null> = new Map();
+
+	// Keyed by the loaded tree node, so a run that started before a reload keeps its own definition's answer.
+	private savedQueries: WeakMap<Operation, StoredQuery> = new WeakMap();
 
 	private triggerHandlers: TriggerHandler[] = [];
 	private operationFlowHandlers: Record<string, any> = {};
@@ -274,6 +301,23 @@ class FlowManager {
 		return handler(data, context);
 	}
 
+	private bindSavedQueries(root: Operation | null, byId: ReadonlyMap<string, StoredQuery>): void {
+		const pending = root ? [root] : [];
+		const seen = new Set<Operation>();
+
+		while (pending.length > 0) {
+			const node = pending.pop()!;
+			if (seen.has(node)) continue;
+			seen.add(node);
+
+			const saved = byId.get(node.id);
+			if (saved !== undefined) this.savedQueries.set(node, saved);
+
+			if (node.resolve) pending.push(node.resolve);
+			if (node.reject) pending.push(node.reject);
+		}
+	}
+
 	private async load(): Promise<void> {
 		const database = getDatabase();
 		const flowsService = new FlowsService({ knex: database, schema: await getSchema() });
@@ -288,6 +332,7 @@ class FlowManager {
 		// through this internal load, the only reveal path. Envelopes stay encrypted in
 		// memory until the confined execution decrypts its declared keys.
 		const storedOptions = new Map<string, unknown>();
+		const savedQueries = new Map<string, StoredQuery>();
 
 		for (const row of await database.select('id', 'type', 'options').from('directus_operations')) {
 			let options: unknown;
@@ -300,6 +345,9 @@ class FlowManager {
 			}
 
 			storedOptions.set(row.id, options);
+
+			if (TARGETING_BUILTIN_OPERATION_TYPES.has(row.type))
+				savedQueries.set(row.id, classifyStoredQueryColumn(row.options));
 
 			for (const key of findUnencryptedSecretOptions(row.type, options)) {
 				logger.warn(
@@ -321,6 +369,8 @@ class FlowManager {
 		}
 
 		const flowTrees = flows.map((flow) => constructFlowTree(flow));
+
+		for (const flow of flowTrees) this.bindSavedQueries(flow.operation, savedQueries);
 
 		for (const flow of flowTrees) {
 			if (flow.trigger === 'event') {
@@ -655,7 +705,21 @@ class FlowManager {
 			return { successor: null, status: 'unknown', data: null, options: null };
 		}
 
-		const options = applyOptionsData(operation.options, keyedData);
+		let storedOptions = operation.options;
+		let storedTargets: StoredTargets | undefined;
+
+		// After interpolation, a Key expression that yields an empty list looks like a cleared Key.
+		if (entry?.trusted && TARGETING_BUILTIN_OPERATION_TYPES.has(operation.type)) {
+			storedOptions = operation.options ?? {};
+
+			try {
+				storedTargets = readStoredTargets(operation.type, storedOptions, this.savedQueries.get(operation));
+			} catch (error) {
+				return { successor: operation.reject, status: 'reject', options: null, ...toStepFailure(error) };
+			}
+		}
+
+		const options = applyOptionsData(storedOptions, keyedData);
 
 		try {
 			const handlerContext = {
@@ -681,6 +745,8 @@ class FlowManager {
 				handlerContext['redactForFlowLog'] = buildFlowLogRedactor(keyedData, accumulatedRedaction);
 			}
 
+			if (storedTargets !== undefined) handlerContext['storedTargets'] = storedTargets;
+
 			let result = await handler(options, handlerContext as Parameters<OperationHandler>[1]);
 
 			// Keep serialization failures on the operation's reject branch.
@@ -693,28 +759,7 @@ class FlowManager {
 
 			return { successor: operation.resolve, status: 'resolve', data: result ?? null, options };
 		} catch (error) {
-			let data;
-			// Keep exception provenance separate from the operator-visible data stored in revisions.
-			let rejection: { status: number; code: string; message: string } | undefined;
-
-			if (error instanceof BaseException) {
-				data = { message: error.message, code: error.code, extensions: error.extensions, status: error.status };
-				rejection = { status: error.status, code: error.code, message: error.message };
-			} else if (error instanceof Error) {
-				data = { message: error.message };
-			} else if (typeof error === 'string') {
-				data = isValidJSON(error) ? parseJSON(error) : error;
-			} else {
-				data = error ?? null;
-			}
-
-			return {
-				successor: operation.reject,
-				status: 'reject',
-				data,
-				options,
-				...(rejection !== undefined ? { rejection } : {}),
-			};
+			return { successor: operation.reject, status: 'reject', options, ...toStepFailure(error) };
 		}
 	}
 
