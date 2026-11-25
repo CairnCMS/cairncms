@@ -322,15 +322,13 @@ describe(`generateJoi`, () => {
 	it(`returns an error if the substring is included in the value`, () => {
 		expect(() => {
 			Joi.assert('field', (Joi.string() as StringSchema).ncontains('field'));
-			// eslint-disable-next-line no-useless-escape
-		}).toThrowError(`\"value\" can't contain [field]`);
+		}).toThrowError(`"value" can't contain [field]`);
 	});
 
 	it(`returns an error if the substring is not contained in the value`, () => {
 		expect(() => {
 			Joi.assert('test', (Joi.string() as StringSchema).contains('field'));
-			// eslint-disable-next-line no-useless-escape
-		}).toThrowError(`\"value\" must contain [field`);
+		}).toThrowError(`"value" must contain [field`);
 	});
 
 	it(`returns the correct schema for a _starts_with match`, () => {

@@ -170,7 +170,7 @@ function useUpload() {
 			if (props.multiple === true) {
 				const uploadedFiles = await uploadFiles(Array.from(files), {
 					onProgressChange: (percentage) => {
-						progress.value = Math.round(percentage.reduce((acc, cur) => (acc += cur)) / files.length);
+						progress.value = Math.round(percentage.reduce((acc, cur) => acc + cur) / files.length);
 						done.value = percentage.filter((p) => p === 100).length;
 					},
 					preset: {
@@ -179,7 +179,7 @@ function useUpload() {
 					},
 				});
 
-				uploadedFiles && emit('input', uploadedFiles);
+				if (uploadedFiles) emit('input', uploadedFiles);
 			} else {
 				const uploadedFile = await uploadFile(Array.from(files)[0], {
 					onProgressChange: (percentage) => {
@@ -193,7 +193,7 @@ function useUpload() {
 					},
 				});
 
-				uploadedFile && emit('input', uploadedFile);
+				if (uploadedFile) emit('input', uploadedFile);
 			}
 		} catch (err: any) {
 			unexpectedError(err);

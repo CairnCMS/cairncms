@@ -27,6 +27,8 @@ jobs:
 
       - name: Prepare
         uses: ./.github/actions/prepare
+        with:
+          node-version: '24'
 
       - name: Run Linter
         run: pnpm lint

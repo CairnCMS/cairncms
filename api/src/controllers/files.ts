@@ -165,7 +165,7 @@ router.post(
 			schema: req.schema,
 		});
 
-		let keys: PrimaryKey | PrimaryKey[] = [];
+		let keys: PrimaryKey | PrimaryKey[];
 
 		if (req.is('multipart/form-data')) {
 			keys = res.locals['savedFiles'];
@@ -292,7 +292,7 @@ router.patch(
 			schema: req.schema,
 		});
 
-		let keys: PrimaryKey[] = [];
+		let keys: PrimaryKey[];
 
 		if (Array.isArray(req.body)) {
 			keys = await service.updateBatch(req.body);

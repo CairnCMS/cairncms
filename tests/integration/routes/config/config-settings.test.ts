@@ -145,7 +145,7 @@ async function restoreSettings(
 		return fields.every((field) => JSON.stringify(norm(current[field])) === JSON.stringify(norm(rawBaseline[field])));
 	};
 
-	let restored = false;
+	let restored: boolean;
 
 	try {
 		const response = await applyConfig(api, settingsOnly(desired), { destructive: false });

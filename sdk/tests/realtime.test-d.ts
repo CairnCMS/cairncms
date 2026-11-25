@@ -10,7 +10,7 @@ type YieldOf<T> = T extends AsyncGenerator<infer Y, any, any> ? Y : never;
 type FrameOf<R extends Promise<{ subscription: AsyncGenerator<any, any, any> }>> = YieldOf<Awaited<R>['subscription']>;
 
 // Never invoked at runtime: declared only so its return type can be inspected at the type level.
-const samples = {
+const _samples = {
 	unset: () => client.subscribe('collection_a'),
 	create: () => client.subscribe('collection_a', { event: 'create' }),
 	deleteFeed: () => client.subscribe('collection_a', { event: 'delete' }),
@@ -32,7 +32,7 @@ describe('realtime delete-feed contract', () => {
 	});
 
 	test('an event-unset subscription never yields a delete variant', () => {
-		type Event = FrameOf<ReturnType<typeof samples.unset>>['event'];
+		type Event = FrameOf<ReturnType<typeof _samples.unset>>['event'];
 
 		assertType<Event>('init');
 		assertType<Event>('create');
@@ -46,7 +46,7 @@ describe('realtime delete-feed contract', () => {
 	});
 
 	test('a create subscription does not promise a delete variant', () => {
-		type Event = FrameOf<ReturnType<typeof samples.create>>['event'];
+		type Event = FrameOf<ReturnType<typeof _samples.create>>['event'];
 
 		assertType<Event>('create');
 
@@ -55,7 +55,7 @@ describe('realtime delete-feed contract', () => {
 	});
 
 	test('a delete subscription yields an id-array payload', () => {
-		type DeleteFrame = Extract<FrameOf<ReturnType<typeof samples.deleteFeed>>, { event: 'delete' }>;
+		type DeleteFrame = Extract<FrameOf<ReturnType<typeof _samples.deleteFeed>>, { event: 'delete' }>;
 
 		assertType<DeleteFrame['data']>([1, 2, 3]);
 		assertType<DeleteFrame['data']>(['a', 'b']);
@@ -66,9 +66,9 @@ describe('realtime delete-feed contract', () => {
 
 	test('a dynamic event keeps delete in the output type rather than erasing it', () => {
 		// a function parameter stays the full union (TS cannot narrow it to a literal), unlike a const
-		const dynamic = (event: SubscriptionOptionsEvents) => client.subscribe('collection_a', { event });
+		const _dynamic = (event: SubscriptionOptionsEvents) => client.subscribe('collection_a', { event });
 
-		type Event = FrameOf<ReturnType<typeof dynamic>>['event'];
+		type Event = FrameOf<ReturnType<typeof _dynamic>>['event'];
 
 		// a runtime-chosen event can be delete, so the output must keep every variant the caller can send
 		assertType<Event>('create');

@@ -1,8 +1,9 @@
 import type { TerminusOptions } from '@godaddy/terminus';
 import { createTerminus } from '@godaddy/terminus';
 import type { Request } from 'express';
-import * as http from 'http';
-import * as https from 'https';
+import { createServer as createHttpServer } from 'http';
+import type { IncomingMessage, Server, ServerResponse } from 'http';
+import { Server as HttpsServer } from 'https';
 import { once } from 'lodash-es';
 import qs from 'qs';
 import createApp from './app.js';
@@ -30,9 +31,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-export async function createServer(): Promise<http.Server> {
+export async function createServer(): Promise<Server> {
 	const app = await createApp();
-	const server = http.createServer(app);
+	const server = createHttpServer(app);
 
 	Object.assign(server, getConfigFromEnv('SERVER_'));
 
@@ -50,7 +51,7 @@ export async function createServer(): Promise<http.Server> {
 
 	if (realtime) server.on('upgrade', realtime.handleUpgrade);
 
-	server.on('request', function (req: http.IncomingMessage & Request, res: http.ServerResponse) {
+	server.on('request', function (req: IncomingMessage & Request, res: ServerResponse) {
 		const startTime = process.hrtime();
 
 		const complete = once(function (finished: boolean) {
@@ -72,7 +73,7 @@ export async function createServer(): Promise<http.Server> {
 			};
 
 			// Compatibility when supporting serving with certificates
-			const protocol = server instanceof https.Server ? 'https' : 'http';
+			const protocol = server instanceof HttpsServer ? 'https' : 'http';
 
 			const rawTarget = req.originalUrl || req.url;
 			const urlInfo = parseRequestTarget(req);

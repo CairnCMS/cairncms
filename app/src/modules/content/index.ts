@@ -110,7 +110,7 @@ export default defineModule({
 				let firstCollection = findFirst(rootCollections);
 
 				// If the first collection couldn't be found in any open collections, try again but with closed collections
-				firstCollection = findFirst(rootCollections, { skipClosed: false });
+				if (!firstCollection) firstCollection = findFirst(rootCollections, { skipClosed: false });
 
 				if (!firstCollection) return;
 
@@ -132,7 +132,7 @@ export default defineModule({
 							['meta.sort', 'collection']
 						);
 
-						const first = findFirst(children);
+						const first = findFirst(children, { skipClosed });
 
 						if (first) return first;
 					}

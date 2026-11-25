@@ -63,7 +63,7 @@ export async function observeBuiltIns<T>(
 	}));
 
 	let result: T;
-	let changes: string[] = [];
+	let changes: string[];
 
 	try {
 		result = await run();

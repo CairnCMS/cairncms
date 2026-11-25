@@ -33,7 +33,7 @@ vi.mock('@cairncms/utils', async () => {
 
 describe('limit', () => {
 	test.each([-1, 0, 100])('should accept number %i', (limit) => {
-		const sanitizedQuery = sanitizeQuery({ limit });
+		const sanitizedQuery = sanitizeQuery({ limit }, null);
 
 		expect(sanitizedQuery.limit).toBe(limit);
 	});
@@ -41,7 +41,7 @@ describe('limit', () => {
 	test('should accept string 1', () => {
 		const limit = '1';
 
-		const sanitizedQuery = sanitizeQuery({ limit });
+		const sanitizedQuery = sanitizeQuery({ limit }, null);
 
 		expect(sanitizedQuery.limit).toBe(1);
 	});
@@ -51,7 +51,7 @@ describe('max limit', () => {
 	test('should replace -1', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: 100 };
 
-		const sanitizedQuery = sanitizeQuery({ limit: -1 });
+		const sanitizedQuery = sanitizeQuery({ limit: -1 }, null);
 
 		expect(sanitizedQuery.limit).toBe(100);
 	});
@@ -59,7 +59,7 @@ describe('max limit', () => {
 	test.each([1, 25, 150])('should accept number %i', (limit) => {
 		factoryEnv = { QUERY_LIMIT_MAX: 100 };
 
-		const sanitizedQuery = sanitizeQuery({ limit });
+		const sanitizedQuery = sanitizeQuery({ limit }, null);
 
 		expect(sanitizedQuery.limit).toBe(limit);
 	});
@@ -67,7 +67,7 @@ describe('max limit', () => {
 	test('should apply max if no limit passed in request', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: 100 };
 
-		const sanitizedQuery = sanitizeQuery({});
+		const sanitizedQuery = sanitizeQuery({}, null);
 
 		expect(sanitizedQuery.limit).toBe(100);
 	});
@@ -75,13 +75,13 @@ describe('max limit', () => {
 	test('should apply lower value if no limit passed in request', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: 100, QUERY_LIMIT_DEFAULT: 25 };
 
-		const sanitizedQuery = sanitizeQuery({});
+		const sanitizedQuery = sanitizeQuery({}, null);
 
 		expect(sanitizedQuery.limit).toBe(25);
 	});
 
 	test('should apply limit from request if no max defined', () => {
-		const sanitizedQuery = sanitizeQuery({ limit: 150 });
+		const sanitizedQuery = sanitizeQuery({ limit: 150 }, null);
 
 		expect(sanitizedQuery.limit).toBe(150);
 	});
@@ -89,7 +89,7 @@ describe('max limit', () => {
 	test('should apply limit from request if max is unlimited', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: -1 };
 
-		const sanitizedQuery = sanitizeQuery({ limit: 150 });
+		const sanitizedQuery = sanitizeQuery({ limit: 150 }, null);
 
 		expect(sanitizedQuery.limit).toBe(150);
 	});
@@ -99,7 +99,7 @@ describe('fields', () => {
 	test('should accept valid value', () => {
 		const fields = ['field_a', 'field_b'];
 
-		const sanitizedQuery = sanitizeQuery({ fields });
+		const sanitizedQuery = sanitizeQuery({ fields }, null);
 
 		expect(sanitizedQuery.fields).toEqual(['field_a', 'field_b']);
 	});
@@ -107,7 +107,7 @@ describe('fields', () => {
 	test('should split as csv when it is a string', () => {
 		const fields = 'field_a,field_b';
 
-		const sanitizedQuery = sanitizeQuery({ fields });
+		const sanitizedQuery = sanitizeQuery({ fields }, null);
 
 		expect(sanitizedQuery.fields).toEqual(['field_a', 'field_b']);
 	});
@@ -115,7 +115,7 @@ describe('fields', () => {
 	test('should split as nested csv when it is an array', () => {
 		const fields = ['field_a,field_b', 'field_c'];
 
-		const sanitizedQuery = sanitizeQuery({ fields });
+		const sanitizedQuery = sanitizeQuery({ fields }, null);
 
 		expect(sanitizedQuery.fields).toEqual(['field_a', 'field_b', 'field_c']);
 	});
@@ -123,7 +123,7 @@ describe('fields', () => {
 	test('should trim', () => {
 		const fields = ['   field_a   '];
 
-		const sanitizedQuery = sanitizeQuery({ fields });
+		const sanitizedQuery = sanitizeQuery({ fields }, null);
 
 		expect(sanitizedQuery.fields).toEqual(['field_a']);
 	});
@@ -133,7 +133,7 @@ describe('group', () => {
 	test('should accept valid value', () => {
 		const groupBy = ['group_a', 'group_b'];
 
-		const sanitizedQuery = sanitizeQuery({ groupBy });
+		const sanitizedQuery = sanitizeQuery({ groupBy }, null);
 
 		expect(sanitizedQuery.group).toEqual(['group_a', 'group_b']);
 	});
@@ -141,7 +141,7 @@ describe('group', () => {
 	test('should split as csv when it is a string', () => {
 		const groupBy = 'group_a,group_b';
 
-		const sanitizedQuery = sanitizeQuery({ groupBy });
+		const sanitizedQuery = sanitizeQuery({ groupBy }, null);
 
 		expect(sanitizedQuery.group).toEqual(['group_a', 'group_b']);
 	});
@@ -149,7 +149,7 @@ describe('group', () => {
 	test('should split as nested csv when it is an array', () => {
 		const groupBy = ['group_a,group_b', 'group_c'];
 
-		const sanitizedQuery = sanitizeQuery({ groupBy });
+		const sanitizedQuery = sanitizeQuery({ groupBy }, null);
 
 		expect(sanitizedQuery.group).toEqual(['group_a', 'group_b', 'group_c']);
 	});
@@ -157,7 +157,7 @@ describe('group', () => {
 	test('should trim', () => {
 		const groupBy = ['   group_a   '];
 
-		const sanitizedQuery = sanitizeQuery({ groupBy });
+		const sanitizedQuery = sanitizeQuery({ groupBy }, null);
 
 		expect(sanitizedQuery.group).toEqual(['group_a']);
 	});
@@ -167,7 +167,7 @@ describe('aggregate', () => {
 	test('should accept valid value', () => {
 		const aggregate = { count: '*' };
 
-		const sanitizedQuery = sanitizeQuery({ aggregate });
+		const sanitizedQuery = sanitizeQuery({ aggregate }, null);
 
 		expect(sanitizedQuery.aggregate).toEqual({ count: ['*'] });
 	});
@@ -175,7 +175,7 @@ describe('aggregate', () => {
 	test('should parse as json when it is a string', () => {
 		const aggregate = '{ "count": "*" }';
 
-		const sanitizedQuery = sanitizeQuery({ aggregate });
+		const sanitizedQuery = sanitizeQuery({ aggregate }, null);
 
 		expect(sanitizedQuery.aggregate).toEqual({ count: ['*'] });
 	});
@@ -185,7 +185,7 @@ describe('sort', () => {
 	test('should accept valid value', () => {
 		const sort = ['field_a', 'field_b'];
 
-		const sanitizedQuery = sanitizeQuery({ sort });
+		const sanitizedQuery = sanitizeQuery({ sort }, null);
 
 		expect(sanitizedQuery.sort).toEqual(['field_a', 'field_b']);
 	});
@@ -193,7 +193,7 @@ describe('sort', () => {
 	test('should split as csv when it is a string', () => {
 		const sort = 'field_a,field_b';
 
-		const sanitizedQuery = sanitizeQuery({ sort });
+		const sanitizedQuery = sanitizeQuery({ sort }, null);
 
 		expect(sanitizedQuery.sort).toEqual(['field_a', 'field_b']);
 	});
@@ -203,7 +203,7 @@ describe('filter', () => {
 	test('should accept valid value', () => {
 		const filter = { field_a: { _eq: 'test' } };
 
-		const sanitizedQuery = sanitizeQuery({ filter });
+		const sanitizedQuery = sanitizeQuery({ filter }, null);
 
 		expect(sanitizedQuery.filter).toEqual({ field_a: { _eq: 'test' } });
 	});
@@ -211,25 +211,25 @@ describe('filter', () => {
 	test('should parse as json when it is a string', () => {
 		const filter = '{ "field_a": { "_eq": "test" } }';
 
-		const sanitizedQuery = sanitizeQuery({ filter });
+		const sanitizedQuery = sanitizeQuery({ filter }, null);
 
 		expect(sanitizedQuery.filter).toEqual({ field_a: { _eq: 'test' } });
 	});
 
 	test('should throw InvalidQueryException when the filter is a non-JSON string', () => {
-		expect(() => sanitizeQuery({ filter: 'filter' })).toThrow(/filter/i);
+		expect(() => sanitizeQuery({ filter: 'filter' }, null)).toThrow(/filter/i);
 	});
 
 	test('should throw InvalidQueryException when the filter is a single character', () => {
-		expect(() => sanitizeQuery({ filter: 'a' })).toThrow(/filter/i);
+		expect(() => sanitizeQuery({ filter: 'a' }, null)).toThrow(/filter/i);
 	});
 
 	test('should throw InvalidQueryException when the filter is a number', () => {
-		expect(() => sanitizeQuery({ filter: 42 })).toThrow(/filter/i);
+		expect(() => sanitizeQuery({ filter: 42 }, null)).toThrow(/filter/i);
 	});
 
 	test('should throw InvalidQueryException when the filter is an array', () => {
-		expect(() => sanitizeQuery({ filter: ['x'] })).toThrow(/filter/i);
+		expect(() => sanitizeQuery({ filter: ['x'] }, null)).toThrow(/filter/i);
 	});
 });
 
@@ -237,7 +237,7 @@ describe('offset', () => {
 	test('should accept number 1', () => {
 		const offset = 1;
 
-		const sanitizedQuery = sanitizeQuery({ offset });
+		const sanitizedQuery = sanitizeQuery({ offset }, null);
 
 		expect(sanitizedQuery.offset).toBe(1);
 	});
@@ -245,7 +245,7 @@ describe('offset', () => {
 	test('should accept string 1', () => {
 		const offset = '1';
 
-		const sanitizedQuery = sanitizeQuery({ offset });
+		const sanitizedQuery = sanitizeQuery({ offset }, null);
 
 		expect(sanitizedQuery.offset).toBe(1);
 	});
@@ -253,7 +253,7 @@ describe('offset', () => {
 	test('should accept zero', () => {
 		const offset = 0;
 
-		const sanitizedQuery = sanitizeQuery({ offset });
+		const sanitizedQuery = sanitizeQuery({ offset }, null);
 
 		expect(sanitizedQuery.offset).toBe(0);
 	});
@@ -261,13 +261,13 @@ describe('offset', () => {
 	test('should accept string zero', () => {
 		const offset = '0';
 
-		const sanitizedQuery = sanitizeQuery({ offset });
+		const sanitizedQuery = sanitizeQuery({ offset }, null);
 
 		expect(sanitizedQuery.offset).toBe(0);
 	});
 
 	test('should accept zero in a deep sub-query', () => {
-		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _offset: 0 } } });
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _offset: 0 } } }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ translations: { _offset: 0 } });
 	});
@@ -277,7 +277,7 @@ describe('page', () => {
 	test('should accept number 1', () => {
 		const page = 1;
 
-		const sanitizedQuery = sanitizeQuery({ page });
+		const sanitizedQuery = sanitizeQuery({ page }, null);
 
 		expect(sanitizedQuery.page).toBe(1);
 	});
@@ -285,7 +285,7 @@ describe('page', () => {
 	test('should accept string 1', () => {
 		const page = '1';
 
-		const sanitizedQuery = sanitizeQuery({ page });
+		const sanitizedQuery = sanitizeQuery({ page }, null);
 
 		expect(sanitizedQuery.page).toBe(1);
 	});
@@ -293,7 +293,7 @@ describe('page', () => {
 	test('should ignore zero', () => {
 		const page = 0;
 
-		const sanitizedQuery = sanitizeQuery({ page });
+		const sanitizedQuery = sanitizeQuery({ page }, null);
 
 		expect(sanitizedQuery.page).toBeUndefined();
 	});
@@ -306,7 +306,7 @@ describe('meta', () => {
 		{ input: 'total_count,filter_count', expected: ['total_count', 'filter_count'] },
 		{ input: ['total_count', 'filter_count'], expected: ['total_count', 'filter_count'] },
 	])('should accept $input', ({ input, expected }) => {
-		const sanitizedQuery = sanitizeQuery({ meta: input }) as any;
+		const sanitizedQuery = sanitizeQuery({ meta: input }, null) as any;
 
 		expect(sanitizedQuery.meta).toEqual(expected);
 	});
@@ -316,7 +316,7 @@ describe('search', () => {
 	test('should accept valid value', () => {
 		const search = 'test';
 
-		const sanitizedQuery = sanitizeQuery({ search });
+		const sanitizedQuery = sanitizeQuery({ search }, null);
 
 		expect(sanitizedQuery.search).toBe('test');
 	});
@@ -324,7 +324,7 @@ describe('search', () => {
 	test('should ignore non-string', () => {
 		const search = ['test'];
 
-		const sanitizedQuery = sanitizeQuery({ search });
+		const sanitizedQuery = sanitizeQuery({ search }, null);
 
 		expect(sanitizedQuery.search).toBeUndefined();
 	});
@@ -334,7 +334,7 @@ describe('export', () => {
 	test('should accept valid value', () => {
 		const format = 'json';
 
-		const sanitizedQuery = sanitizeQuery({ export: format });
+		const sanitizedQuery = sanitizeQuery({ export: format }, null);
 
 		expect(sanitizedQuery.export).toBe('json');
 	});
@@ -344,7 +344,7 @@ describe('deep', () => {
 	test('should accept valid value', () => {
 		const deep = { deep: { relational_field: { _sort: ['name'] } } };
 
-		const sanitizedQuery = sanitizeQuery({ deep });
+		const sanitizedQuery = sanitizeQuery({ deep }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ deep: { relational_field: { _sort: ['name'] } } });
 	});
@@ -352,7 +352,7 @@ describe('deep', () => {
 	test('should parse as json when it is a string', () => {
 		const deep = '{ "deep": { "relational_field": { "_sort": ["name"] } } }';
 
-		const sanitizedQuery = sanitizeQuery({ deep });
+		const sanitizedQuery = sanitizeQuery({ deep }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ deep: { relational_field: { _sort: ['name'] } } });
 	});
@@ -360,7 +360,7 @@ describe('deep', () => {
 	test('should ignore non-underscore-prefixed queries', () => {
 		const deep = { deep: { relational_field_a: { _sort: ['name'] }, relational_field_b: { sort: ['name'] } } };
 
-		const sanitizedQuery = sanitizeQuery({ deep });
+		const sanitizedQuery = sanitizeQuery({ deep }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ deep: { relational_field_a: { _sort: ['name'] } } });
 	});
@@ -368,7 +368,7 @@ describe('deep', () => {
 	test('resolves a deep _limit of -1 to the maximum', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: 10 };
 
-		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: -1 } } });
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: -1 } } }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ translations: { _limit: 10 } });
 	});
@@ -376,7 +376,7 @@ describe('deep', () => {
 	test('keeps an explicit deep _limit under the maximum', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: 10 };
 
-		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: 5 } } });
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: 5 } } }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ translations: { _limit: 5 } });
 	});
@@ -384,7 +384,7 @@ describe('deep', () => {
 	test('does not inject a deep _limit when only other options are present', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: 10 };
 
-		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _sort: ['id'] } } });
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _sort: ['id'] } } }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ translations: { _sort: ['id'] } });
 	});
@@ -392,7 +392,7 @@ describe('deep', () => {
 	test('preserves deep options alongside a limit when a maximum is configured', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: 10 };
 
-		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _sort: ['id'], _limit: 3 } } });
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _sort: ['id'], _limit: 3 } } }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ translations: { _sort: ['id'], _limit: 3 } });
 	});
@@ -400,14 +400,14 @@ describe('deep', () => {
 	test('drops a null deep _limit instead of crashing', () => {
 		factoryEnv = { QUERY_LIMIT_MAX: 10 };
 
-		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: null, _sort: ['id'] } } });
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: null, _sort: ['id'] } } }, null);
 
 		expect(sanitizedQuery.deep).toEqual({ translations: { _sort: ['id'] } });
 	});
 
 	test('keeps built-in property names in a JSON string deep as own data', async () => {
 		const { result, changes } = await observeBuiltIns(BUILT_IN_TARGETS, () =>
-			sanitizeQuery({ deep: '{"toString":{"call":{"_limit":1}}}' })
+			sanitizeQuery({ deep: '{"toString":{"call":{"_limit":1}}}' }, null)
 		);
 
 		expect(changes).toEqual([]);
@@ -417,7 +417,7 @@ describe('deep', () => {
 
 	test('keeps built-in property names in an object deep as own data', async () => {
 		const { result, changes } = await observeBuiltIns(BUILT_IN_TARGETS, () =>
-			sanitizeQuery({ deep: JSON.parse('{"toString":{"call":{"_limit":1}}}') })
+			sanitizeQuery({ deep: JSON.parse('{"toString":{"call":{"_limit":1}}}') }, null)
 		);
 
 		expect(changes).toEqual([]);
@@ -430,7 +430,7 @@ describe('alias', () => {
 	test('should accept valid value', () => {
 		const alias = { field_a: 'testField' };
 
-		const sanitizedQuery = sanitizeQuery({ alias });
+		const sanitizedQuery = sanitizeQuery({ alias }, null);
 
 		expect(sanitizedQuery.alias).toEqual({ field_a: 'testField' });
 	});
@@ -438,7 +438,7 @@ describe('alias', () => {
 	test('should parse as json when it is a string', () => {
 		const alias = '{ "field_a": "testField" }';
 
-		const sanitizedQuery = sanitizeQuery({ alias });
+		const sanitizedQuery = sanitizeQuery({ alias }, null);
 
 		expect(sanitizedQuery.alias).toEqual({ field_a: 'testField' });
 	});

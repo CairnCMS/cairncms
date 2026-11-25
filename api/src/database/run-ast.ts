@@ -1,3 +1,4 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Accountability, Item, Query, SchemaOverview } from '@cairncms/types';
 import { toArray } from '@cairncms/utils';
 import type { Knex } from 'knex';
@@ -37,7 +38,7 @@ type RunASTOptions = {
 	 */
 	stripNonRequested?: boolean;
 
-	accountability?: Accountability | null;
+	accountability: Accountability | null;
 };
 
 /**
@@ -46,11 +47,15 @@ type RunASTOptions = {
 export default async function runAST(
 	originalAST: AST | NestedCollectionNode,
 	schema: SchemaOverview,
-	options?: RunASTOptions
+	options: RunASTOptions
 ): Promise<null | Item | Item[]> {
+	if (options?.accountability === undefined) {
+		throw new InvalidQueryException('runAST requires explicit accountability; pass null for trusted/system callers');
+	}
+
 	const ast = cloneDeep(originalAST);
 
-	const knex = options?.knex || getDatabase();
+	const knex = options.knex || getDatabase();
 
 	if (ast.type === 'a2o') {
 		const results: { [collection: string]: null | Item | Item[] } = {};
@@ -61,7 +66,7 @@ export default async function runAST(
 
 		return results;
 	} else {
-		return await run(ast.name, ast.children, options?.query || ast.query);
+		return await run(ast.name, ast.children, options.query || ast.query);
 	}
 
 	async function run(
@@ -78,7 +83,7 @@ export default async function runAST(
 		);
 
 		// The actual knex query builder instance. This is a promise that resolves with the raw items from the db
-		const dbQuery = await getDBQuery(schema, knex, collection, fieldNodes, query, options?.accountability ?? null);
+		const dbQuery = await getDBQuery(schema, knex, collection, fieldNodes, query, options.accountability);
 
 		const rawItems: Item | Item[] = await dbQuery;
 
@@ -94,7 +99,7 @@ export default async function runAST(
 		const nestedNodes = applyParentFilters(schema, nestedCollectionNodes, items);
 
 		for (const nestedNode of nestedNodes) {
-			let nestedItems: Item[] | null = [];
+			let nestedItems: Item[] | null;
 
 			if (nestedNode.type === 'o2m') {
 				let hasMore = true;
@@ -113,7 +118,7 @@ export default async function runAST(
 					nestedItems = (await runAST(node, schema, {
 						knex,
 						nested: true,
-						accountability: options?.accountability ?? null,
+						accountability: options.accountability,
 					})) as Item[] | null;
 
 					if (nestedItems) {
@@ -134,7 +139,7 @@ export default async function runAST(
 				nestedItems = (await runAST(node, schema, {
 					knex,
 					nested: true,
-					accountability: options?.accountability ?? null,
+					accountability: options.accountability,
 				})) as Item[] | null;
 
 				if (nestedItems) {
@@ -148,7 +153,7 @@ export default async function runAST(
 		// to work (primary / foreign keys) even if they're not explicitly requested. After all fetching
 		// and nesting is done, we parse through the output structure, and filter out all non-requested
 		// fields
-		if (options?.nested !== true && options?.stripNonRequested !== false) {
+		if (options.nested !== true && options.stripNonRequested !== false) {
 			items = removeTemporaryFields(schema, items, originalAST, primaryKeyField);
 		}
 
@@ -256,7 +261,7 @@ async function getDBQuery(
 	table: string,
 	fieldNodes: (FieldNode | FunctionFieldNode)[],
 	query: Query,
-	accountability?: Accountability | null
+	accountability: Accountability | null
 ): Promise<Knex.QueryBuilder> {
 	const preProcess = getColumnPreprocessor(knex, schema, table);
 	const queryCopy = clone(query);
@@ -268,8 +273,7 @@ async function getDBQuery(
 	// Queries with aggregates and groupBy will not have duplicate result
 	if (queryCopy.aggregate || queryCopy.group) {
 		const flatQuery = knex.select(fieldNodes.map(preProcess)).from(table);
-		return await applyQuery(knex, table, flatQuery, queryCopy, schema, { accountability: accountability ?? null })
-			.query;
+		return await applyQuery(knex, table, flatQuery, queryCopy, schema, { accountability }).query;
 	}
 
 	const primaryKey = schema.collections[table]!.primary;
@@ -292,7 +296,7 @@ async function getDBQuery(
 		aliasMap,
 		isInnerQuery: true,
 		hasMultiRelationalSort,
-		accountability: accountability ?? null,
+		accountability,
 	});
 
 	const needsInnerQuery = hasMultiRelationalSort || hasMultiRelationalFilter;

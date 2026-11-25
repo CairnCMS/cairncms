@@ -47,7 +47,6 @@ function deferred<T>() {
 	return { promise, resolve };
 }
 
-// eslint-disable-next-line vue/one-component-per-file
 const VUpload = defineComponent({
 	name: 'VUpload',
 	props: { fileId: { type: String, default: null } },

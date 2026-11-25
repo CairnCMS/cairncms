@@ -26,24 +26,24 @@ describe('Test Schema Fallback', () => {
 		type CoreCollection = MergeCoreCollection<any, 'directus_test', { test: string }>;
 
 		assertType<CoreCollection>({ test: 'string' });
-		// @ts-expect-error
+		// @ts-expect-error -- Core collection overrides must reject undeclared properties.
 		assertType<CoreCollection>({ error: 'string', test: 'string' });
 	});
 
 	test('Should fail for explicit invalid schema types', () => {
-		// @ts-expect-error
+		// @ts-expect-error -- Null is not a supported schema.
 		assertType<RegularCollections<null>>('test');
-		// @ts-expect-error
+		// @ts-expect-error -- Undefined is not a supported schema.
 		assertType<RegularCollections<undefined>>('test');
-		// @ts-expect-error
+		// @ts-expect-error -- A string is not a supported schema.
 		assertType<RegularCollections<string>>('test');
-		// @ts-expect-error
+		// @ts-expect-error -- A number is not a supported schema.
 		assertType<RegularCollections<number>>('test');
-		// @ts-expect-error
+		// @ts-expect-error -- Unknown is not a supported schema.
 		assertType<RegularCollections<unknown>>('test');
-		// @ts-expect-error
+		// @ts-expect-error -- An array of unknown values is not a supported schema.
 		assertType<RegularCollections<unknown[]>>('test');
-		// @ts-expect-error
+		// @ts-expect-error -- A string or boolean union is not a supported schema.
 		assertType<RegularCollections<string | boolean>>('test');
 	});
 });

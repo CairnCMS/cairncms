@@ -40,9 +40,9 @@ export async function loadExtensions(): Promise<void> {
 
 		customExtensions = loaded;
 	} catch (err: any) {
-		// eslint-disable-next-line no-console
+		// eslint-disable-next-line no-console -- Report extension initialization failures in the browser.
 		console.warn(`Couldn't load extensions`);
-		// eslint-disable-next-line no-console
+		// eslint-disable-next-line no-console -- Include the original extension initialization error in browser diagnostics.
 		console.warn(err);
 	}
 }

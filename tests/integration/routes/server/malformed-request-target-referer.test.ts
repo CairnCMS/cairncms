@@ -27,7 +27,7 @@ describe('malformed Referer with caching enabled', () => {
 				records(logs).some((record) => record['err']?.message?.includes(ERROR_SINK_FAILURE)),
 		});
 
-		let logs = '';
+		let logs: string;
 
 		try {
 			const response = await request(api.url)

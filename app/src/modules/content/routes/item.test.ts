@@ -81,7 +81,6 @@ const i18n = createI18n({ legacy: false });
 const COLLECTION = 'test_singleton';
 const ROLE = 'role-1';
 
-// eslint-disable-next-line vue/one-component-per-file
 const VButton = defineComponent({
 	name: 'VButton',
 	props: { disabled: { type: Boolean, default: false } },
@@ -89,14 +88,12 @@ const VButton = defineComponent({
 	template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /><slot name="append-outer" /></button>',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VIcon = defineComponent({
 	name: 'VIcon',
 	props: { name: { type: String, default: '' } },
 	template: '<i :data-name="name" />',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VForm = defineComponent({
 	name: 'VForm',
 	props: {

@@ -130,7 +130,6 @@ async function setLanguage() {
 		const lang = props.language.toLowerCase();
 
 		if (props.type === 'json' || lang === 'json') {
-			// @ts-ignore
 			await import('codemirror/mode/javascript/javascript.js');
 
 			const jsonlint = (await import('jsonlint-mod')) as any;
@@ -179,7 +178,6 @@ async function getImports(optionsObj: Record<string, any>): Promise<void> {
 		}
 
 		if (optionsObj.markSelection) {
-			// @ts-ignore - @types/codemirror is missing this export
 			imports.push(import('codemirror/addon/selection/mark-selection.js'));
 		}
 
@@ -197,9 +195,7 @@ async function getImports(optionsObj: Record<string, any>): Promise<void> {
 
 		if (optionsObj.hintOptions || optionsObj.showHint) {
 			imports.push(import('codemirror/addon/hint/show-hint.js'));
-			// @ts-ignore - @types/codemirror is missing this export
 			imports.push(import('codemirror/addon/hint/show-hint.css'));
-			// @ts-ignore - @types/codemirror is missing this export
 			imports.push(import('codemirror/addon/hint/javascript-hint.js'));
 		}
 

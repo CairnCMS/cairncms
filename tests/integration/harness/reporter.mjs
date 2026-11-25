@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- This integration runner reports progress and failures to the terminal. */
 import { inspect } from 'node:util';
 
 // The standard reporter defers error details until the final summary.

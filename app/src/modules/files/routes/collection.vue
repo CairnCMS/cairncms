@@ -512,7 +512,7 @@ function useFileUpload() {
 		await uploadFiles(files, {
 			preset,
 			onProgressChange: (progress) => {
-				const percentageDone = progress.reduce((val, cur) => (val += cur)) / progress.length;
+				const percentageDone = progress.reduce((val, cur) => val + cur) / progress.length;
 
 				const total = files.length;
 				const done = progress.filter((p) => p === 100).length;

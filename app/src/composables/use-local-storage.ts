@@ -15,7 +15,7 @@ export function useLocalStorage(key: string, defaultValue: LocalStorageObjectTyp
 		try {
 			return parseJSON(rawExistingValue);
 		} catch (e) {
-			// eslint-disable-next-line no-console
+			// eslint-disable-next-line no-console -- Report invalid persisted JSON when restoring browser state.
 			console.warn(`Couldn't parse value from local storage`, e);
 
 			return defaultValue;
@@ -26,7 +26,7 @@ export function useLocalStorage(key: string, defaultValue: LocalStorageObjectTyp
 		try {
 			localStorage.setItem(internalKey, JSON.stringify(value));
 		} catch (e) {
-			// eslint-disable-next-line no-console
+			// eslint-disable-next-line no-console -- Report browser storage write failures.
 			console.warn(`Couldn't stringify and set value to local storage`, e);
 		}
 	}

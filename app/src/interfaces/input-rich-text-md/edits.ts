@@ -35,7 +35,7 @@ const alterations: AlterationFunctions = {
 	heading(selection, { cursorTo }, options) {
 		const level = options?.level || 3;
 
-		let newSelection = selection;
+		let newSelection: string;
 		const newCursor = cursorTo;
 
 		const prefix = '#'.repeat(level) + ' ';
@@ -50,7 +50,7 @@ const alterations: AlterationFunctions = {
 		return { newSelection, newCursor };
 	},
 	bold(selection, { cursorTo }) {
-		let newSelection = selection;
+		let newSelection: string;
 		const newCursor = cursorTo;
 
 		if (selection.startsWith('**') && selection.endsWith('**')) {
@@ -63,7 +63,7 @@ const alterations: AlterationFunctions = {
 		return { newSelection, newCursor };
 	},
 	italic(selection, { cursorTo }) {
-		let newSelection = selection;
+		let newSelection: string;
 		const newCursor = cursorTo;
 
 		if (selection.startsWith('*') && selection.endsWith('*')) {
@@ -76,7 +76,7 @@ const alterations: AlterationFunctions = {
 		return { newSelection, newCursor };
 	},
 	strikethrough(selection, { cursorTo }) {
-		let newSelection = selection;
+		let newSelection: string;
 		const newCursor = cursorTo;
 
 		if (selection.startsWith('~~') && selection.endsWith('~~')) {
@@ -89,7 +89,7 @@ const alterations: AlterationFunctions = {
 		return { newSelection, newCursor };
 	},
 	listBulleted(selection, { cursorTo }) {
-		let newSelection = selection;
+		let newSelection: string;
 		const newCursor = cursorTo;
 
 		const lines = selection.split('\n');
@@ -109,7 +109,7 @@ const alterations: AlterationFunctions = {
 		return { newSelection, newCursor };
 	},
 	listNumbered(selection, { cursorTo }) {
-		let newSelection = selection;
+		let newSelection: string;
 		const newCursor = cursorTo;
 
 		const lines = selection.split('\n');
@@ -129,7 +129,7 @@ const alterations: AlterationFunctions = {
 		return { newSelection, newCursor };
 	},
 	blockquote(selection, { cursorTo }) {
-		let newSelection = selection;
+		let newSelection: string;
 		const newCursor = cursorTo;
 
 		const lines = selection.split('\n');
@@ -164,7 +164,7 @@ const alterations: AlterationFunctions = {
 			return { newSelection, newCursor };
 		} else {
 			// Inline
-			let newSelection = selection;
+			let newSelection: string;
 			const newCursor = cursorTo;
 
 			if (selection.startsWith('`') && selection.endsWith('`')) {
@@ -178,7 +178,7 @@ const alterations: AlterationFunctions = {
 		}
 	},
 	link(selection, { cursorFrom, cursorTo }) {
-		let newSelection = selection;
+		let newSelection: string;
 		const newCursor = cursorTo;
 		let highlight;
 
@@ -246,7 +246,7 @@ const alterations: AlterationFunctions = {
 			return { newSelection, newCursor };
 		} else {
 			// Inline
-			let newSelection = selection;
+			let newSelection: string;
 			const newCursor = cursorTo;
 
 			if (selection.startsWith(options.prefix) && selection.endsWith(options.suffix)) {

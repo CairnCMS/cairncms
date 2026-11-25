@@ -42,14 +42,14 @@ describe('public export surface', () => {
 	});
 
 	it('does NOT export helpers for unsupported collections at type-check time', () => {
-		// @ts-expect-error
-		const _c = sdk.readContentVersions;
-		// @ts-expect-error
-		const _d = sdk.createContentVersion;
-		// @ts-expect-error
-		const _e = sdk.readExtensions;
-		// @ts-expect-error
-		const _f = sdk.updateExtension;
+		// @ts-expect-error -- readContentVersions is not part of the supported SDK surface.
+		void sdk.readContentVersions;
+		// @ts-expect-error -- createContentVersion is not part of the supported SDK surface.
+		void sdk.createContentVersion;
+		// @ts-expect-error -- readExtensions is not part of the supported SDK surface.
+		void sdk.readExtensions;
+		// @ts-expect-error -- updateExtension is not part of the supported SDK surface.
+		void sdk.updateExtension;
 	});
 
 	it('does NOT export unsupported symbols at runtime', () => {

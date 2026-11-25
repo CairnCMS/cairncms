@@ -15,7 +15,7 @@ export function getConfigFromEnv(
 		if (key.toLowerCase().startsWith(prefix.toLowerCase()) === false) continue;
 
 		if (omitPrefix) {
-			let matches = false;
+			let matches: boolean;
 
 			if (Array.isArray(omitPrefix)) {
 				matches = omitPrefix.some((prefix) => key.toLowerCase().startsWith(prefix.toLowerCase()));

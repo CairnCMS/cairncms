@@ -19,13 +19,11 @@ vi.mock('@/api', () => ({
 
 enableAutoUnmount(afterEach);
 
-// eslint-disable-next-line vue/one-component-per-file
 const VDrawer = defineComponent({
 	name: 'VDrawer',
 	template: '<div><slot name="actions" /><slot /></div>',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VForm = defineComponent({
 	name: 'VForm',
 	props: { modelValue: { type: Object, default: () => ({}) } },
@@ -33,7 +31,6 @@ const VForm = defineComponent({
 	template: '<div class="v-form-stub" />',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VButton = defineComponent({
 	name: 'VButton',
 	emits: ['click'],

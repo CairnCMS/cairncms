@@ -64,7 +64,7 @@ export default async function runSeed(database: Knex): Promise<void> {
 				} else if (columnInfo.type?.startsWith('geometry')) {
 					column = helpers.st.createColumn(tableBuilder, { field: columnName, type: columnInfo.type } as Field);
 				} else {
-					// @ts-ignore
+					// @ts-expect-error -- Seed data names the Knex column builder method as a string.
 					column = tableBuilder[columnInfo.type!](columnName);
 				}
 

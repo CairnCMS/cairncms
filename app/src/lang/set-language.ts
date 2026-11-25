@@ -13,7 +13,7 @@ export async function setLanguage(lang: Language): Promise<boolean> {
 	const translationsStore = useTranslationsStore();
 
 	if (Object.keys(AVAILABLE_LANGUAGES).includes(lang) === false) {
-		// eslint-disable-next-line no-console
+		// eslint-disable-next-line no-console -- Report a requested language that is not available.
 		console.warn(`"${lang}" is not an available language in the CairnCMS app.`);
 	} else {
 		if (loadedLanguages.includes(lang) === false) {
@@ -22,7 +22,7 @@ export async function setLanguage(lang: Language): Promise<boolean> {
 				i18n.global.mergeLocaleMessage(lang, translations);
 				loadedLanguages.push(lang);
 			} catch (err: any) {
-				// eslint-disable-next-line no-console
+				// eslint-disable-next-line no-console -- Report a failed language bundle load in the browser.
 				console.warn(err);
 			}
 		}
@@ -42,7 +42,7 @@ export async function setLanguage(lang: Language): Promise<boolean> {
 
 		await loadDateFNSLocale(lang);
 	} catch {
-		// eslint-disable-next-line no-console
+		// eslint-disable-next-line no-console -- Report a failed custom translation load in the browser.
 		console.error('Failed loading translations');
 	}
 

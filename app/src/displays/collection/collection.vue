@@ -12,8 +12,8 @@ import { toRefs } from 'vue';
 
 const props = withDefaults(
 	defineProps<{
-		value: string | null;
-		icon: boolean;
+		value?: string | null;
+		icon?: boolean;
 	}>(),
 	{
 		value: null,

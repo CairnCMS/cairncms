@@ -20,20 +20,12 @@ let systemCache: Keyv | null = null;
 let localSchemaCache: Keyv | null = null;
 let sharedSchemaCache: Keyv | null = null;
 let lockCache: Keyv | null = null;
-let messengerSubscribed = false;
 
 type Store = 'memory' | 'redis' | 'memcache';
 
 const messenger = getMessenger();
 
-if (
-	env['MESSENGER_STORE'] === 'redis' &&
-	env['CACHE_STORE'] === 'memory' &&
-	env['CACHE_AUTO_PURGE'] &&
-	!messengerSubscribed
-) {
-	messengerSubscribed = true;
-
+if (env['MESSENGER_STORE'] === 'redis' && env['CACHE_STORE'] === 'memory' && env['CACHE_AUTO_PURGE']) {
 	messenger.subscribe('schemaChanged', async (opts) => {
 		if (cache && opts?.['autoPurgeCache'] !== false) {
 			await cache.clear();

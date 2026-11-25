@@ -110,7 +110,6 @@ export class BoxSelectControl {
 	getMousePosition(event: MouseEvent): Point {
 		const container = this.map!.getContainer();
 		const rect = container.getBoundingClientRect();
-		// @ts-ignore
 		return new Point(event.clientX - rect.left - container.clientLeft, event.clientY - rect.top - container.clientTop);
 	}
 

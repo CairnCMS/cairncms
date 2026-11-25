@@ -1,4 +1,3 @@
-/* eslint-disable no-empty-pattern */
 import { expect, test as base, vi } from 'vitest';
 import { setTimeout as delay } from 'node:timers/promises';
 import { initializeFixtures } from '../fixture-setup.mjs';

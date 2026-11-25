@@ -31,9 +31,9 @@ const hasError = computed(() => !!error.value);
 onErrorCaptured((err, vm, info) => {
 	error.value = err;
 	const source = props.name ? kebabCase(props.name) : getVueComponentName(vm);
-	// eslint-disable-next-line no-console
+	// eslint-disable-next-line no-console -- Report the component name and Vue context for the captured browser error.
 	console.warn(`[${source}-error] ${info}`);
-	// eslint-disable-next-line no-console
+	// eslint-disable-next-line no-console -- Include the original captured error in browser diagnostics.
 	console.warn(err);
 	if (props.stopPropagation) return false;
 });

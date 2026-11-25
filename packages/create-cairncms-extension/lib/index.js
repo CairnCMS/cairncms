@@ -8,7 +8,7 @@ import { create } from '@cairncms/extensions-sdk/cli';
 run();
 
 async function run() {
-	// eslint-disable-next-line no-console
+	// eslint-disable-next-line no-console -- The interactive scaffolding CLI prints its welcome message.
 	console.log('This utility will walk you through creating a CairnCMS extension.\n');
 
 	const { type, name, language } = await inquirer.prompt([

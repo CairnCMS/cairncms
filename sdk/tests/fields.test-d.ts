@@ -9,15 +9,15 @@ describe('Test QueryFields', () => {
 	test('error situations', () => {
 		// all these should fail
 
-		// @ts-expect-error
+		// @ts-expect-error -- Undefined is not a field selection.
 		assertType<CollectionAFields>(undefined);
-		// @ts-expect-error
+		// @ts-expect-error -- A field selection must be an array.
 		assertType<CollectionAFields>({});
-		// @ts-expect-error
+		// @ts-expect-error -- Unknown collection fields must be rejected.
 		assertType<CollectionAFields>(['not-a-field']);
-		// @ts-expect-error
+		// @ts-expect-error -- Unknown fields on the many-to-one collection must be rejected.
 		assertType<CollectionAFields>([{ m2o: ['not-a-field'] }]);
-		// @ts-expect-error
+		// @ts-expect-error -- Unknown fields on the junction collection must be rejected.
 		assertType<CollectionAFields>([{ m2m: [{ not_a_field: ['not-a-field'] }] }]);
 	});
 

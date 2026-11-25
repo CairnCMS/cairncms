@@ -12,7 +12,7 @@ if (process.argv.length === 3 && process.argv[2] === 'start' && version) {
 	isUpToDate('cairncms', version)
 		.then((latest) => {
 			if (latest) {
-				// eslint-disable-next-line no-console
+				// eslint-disable-next-line no-console -- The CLI prints update availability to the terminal.
 				console.warn(`Update available: ${version} -> ${latest}`);
 			}
 		})
