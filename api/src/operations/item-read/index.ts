@@ -1,8 +1,9 @@
 import type { Accountability, PrimaryKey } from '@cairncms/types';
-import { defineOperationApi, optionToObject, toArray } from '@cairncms/utils';
+import { defineOperationApi, optionToObject } from '@cairncms/utils';
 import { ItemsService } from '../../services/items.js';
 import type { Item } from '../../types/index.js';
 import { getAccountabilityForRole } from '../../utils/get-accountability-for-role.js';
+import { readStoredTargets, resolveKeySelection, type StoredTargets } from '../../utils/operation-targets.js';
 import { sanitizeQuery } from '../../utils/sanitize-query.js';
 
 type Options = {
@@ -16,7 +17,19 @@ type Options = {
 export default defineOperationApi<Options>({
 	id: 'item-read',
 
-	handler: async ({ collection, key, query, emitEvents, permissions }, { accountability, database, getSchema }) => {
+	handler: async ({ collection, key, query, emitEvents, permissions }, context) => {
+		const { accountability, database, getSchema } = context;
+
+		const targets =
+			(context as { storedTargets?: StoredTargets }).storedTargets ?? readStoredTargets('item-read', { key, query });
+
+		let keys: unknown[] | undefined;
+
+		if (targets.key === 'configured') {
+			keys = resolveKeySelection(key);
+			if (keys.length === 0) return [];
+		}
+
 		const schema = await getSchema({ database });
 		let customAccountability: Accountability | null;
 
@@ -36,21 +49,19 @@ export default defineOperationApi<Options>({
 			knex: database,
 		});
 
-		const queryObject = query ? optionToObject(query) : {};
+		// Unlike a blank saved Query, a configured one that resolves to whitespace still fails to decode, so it never
+		// widens to a listing.
+		const queryObject = targets.query === 'none' || !query ? {} : optionToObject(query);
 		const sanitizedQueryObject = sanitizeQuery(queryObject, customAccountability);
 
 		let result: Item | Item[] | null;
 
-		if (!key || (Array.isArray(key) && key.length === 0)) {
+		if (!keys) {
 			result = await itemsService.readByQuery(sanitizedQueryObject, { emitEvents: !!emitEvents });
+		} else if (keys.length === 1) {
+			result = await itemsService.readOne(keys[0] as PrimaryKey, sanitizedQueryObject, { emitEvents: !!emitEvents });
 		} else {
-			const keys = toArray(key);
-
-			if (keys.length === 1) {
-				result = await itemsService.readOne(keys[0]!, sanitizedQueryObject, { emitEvents: !!emitEvents });
-			} else {
-				result = await itemsService.readMany(keys, sanitizedQueryObject, { emitEvents: !!emitEvents });
-			}
+			result = await itemsService.readMany(keys as PrimaryKey[], sanitizedQueryObject, { emitEvents: !!emitEvents });
 		}
 
 		return result;

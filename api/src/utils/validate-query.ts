@@ -25,7 +25,7 @@ const querySchema = Joi.object({
 	alias: Joi.object(),
 }).id('query');
 
-function getConfiguredLimitSchema() {
+export function getConfiguredLimitSchema() {
 	const queryLimit = getQueryLimitConfig(env);
 	return hasFiniteMax(queryLimit) ? baseLimitSchema.max(queryLimit.max) : baseLimitSchema;
 }

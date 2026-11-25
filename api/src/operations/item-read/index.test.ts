@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { ItemsService } from '../../services/index.js';
+import { getAccountabilityForRole } from '../../utils/get-accountability-for-role.js';
 import config from './index.js';
 
 vi.mock('../../services/items.js', () => {
@@ -147,5 +148,77 @@ describe('Operations / Item Read', () => {
 		);
 
 		expect(ItemsService.prototype.readMany).toHaveBeenCalledWith(keys, {}, { emitEvents: false });
+	});
+});
+
+describe('Operations / Item Read / targets', () => {
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	const keysMode = { storedTargets: { key: 'configured', query: 'none' } };
+
+	function run(options: Record<string, unknown>, context: Record<string, unknown> = {}) {
+		return config.handler(
+			{ collection: testCollection, permissions: '$full', ...options } as any,
+			{ accountability: testAccountability, getSchema, ...context } as any
+		);
+	}
+
+	function expectNothingRead() {
+		expect(getSchema).not.toHaveBeenCalled();
+		expect(vi.mocked(getAccountabilityForRole)).not.toHaveBeenCalled();
+		expect(ItemsService.prototype.readOne).not.toHaveBeenCalled();
+		expect(ItemsService.prototype.readMany).not.toHaveBeenCalled();
+		expect(ItemsService.prototype.readByQuery).not.toHaveBeenCalled();
+	}
+
+	test.each([{ key: [] }, { key: [[]] }])(
+		'returns [] for the empty list $key without reading anything',
+		async ({ key }) => {
+			await expect(run({ key }, keysMode)).resolves.toEqual([]);
+			expectNothingRead();
+		}
+	);
+
+	test.each([{ key: '' }, { key: null }, { key: [null] }, { key: { id: 5 } }])(
+		'refuses the keys $key with INVALID_PAYLOAD instead of listing records',
+		async ({ key }) => {
+			await expect(run({ key }, keysMode)).rejects.toMatchObject({ code: 'INVALID_PAYLOAD' });
+			expectNothingRead();
+		}
+	);
+
+	test('reads record 0 as a key', async () => {
+		await run({ key: 0 }, keysMode);
+		expect(ItemsService.prototype.readOne).toHaveBeenCalledWith(0, {}, expect.anything());
+	});
+
+	test('still lists records with neither keys nor a query', async () => {
+		await run({}, { storedTargets: { key: 'none', query: 'none' } });
+		expect(ItemsService.prototype.readByQuery).toHaveBeenCalledOnce();
+	});
+
+	test('reads specific records when the saved query is blank text', async () => {
+		await run({ key: [5], query: '   ' }, keysMode);
+		expect(ItemsService.prototype.readOne).toHaveBeenCalledWith(5, {}, expect.anything());
+	});
+
+	test('fails before reading when a saved query resolves to whitespace', async () => {
+		await expect(run({ query: ' ' }, { storedTargets: { key: 'none', query: 'configured' } })).rejects.toThrow(
+			SyntaxError
+		);
+
+		expect(ItemsService.prototype.readByQuery).not.toHaveBeenCalled();
+	});
+
+	test('still lists records when a saved query resolves to an empty string', async () => {
+		await run({ query: '' }, { storedTargets: { key: 'none', query: 'configured' } });
+		expect(ItemsService.prototype.readByQuery).toHaveBeenCalledOnce();
+	});
+
+	test('reads specific records with a query that picks fields', async () => {
+		await run({ key: [5], query: { fields: ['name'] } }, { storedTargets: { key: 'configured', query: 'configured' } });
+		expect(ItemsService.prototype.readOne).toHaveBeenCalledWith(5, { fields: ['name'] }, expect.anything());
 	});
 });

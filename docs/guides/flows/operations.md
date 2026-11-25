@@ -48,6 +48,14 @@ Creates one or more items in a collection.
 
 Appends an array of created item IDs.
 
+## Choosing items for a data step
+
+Use **IDs** to read, update, or delete specific items. An ID can be text or a number, including `0`. If an earlier step returns an empty list of IDs, the data step returns `[]` and continues without reading or changing any items. If it supplies `null`, empty text, or an invalid ID, the step takes its failure path.
+
+Update Data and Delete Data fail if you fill in both **IDs** and **Query**. To use the IDs, clear **Query**. To select items by query, leave **IDs** blank and supply a filter, search term, or limit.
+
+For example, to update only the paid orders in a list, put the order IDs in an `_in` filter and add `status = paid` to the same query. The step needs read access to those orders and both fields. For a large list, check that the [query limit](/docs/api/filters-and-queries/#pagination) covers the orders you want to update.
+
 ## Read Data
 
 Reads items from a collection by ID or query.
@@ -58,7 +66,7 @@ Reads items from a collection by ID or query.
 - **Permissions** — the role whose permissions the operation runs under
 - **Emit Events** — whether to fire event hooks
 
-Appends the result of the read. With a single ID, this is a single item; with multiple IDs or a query, this is an array of items.
+One ID returns one item. Multiple IDs or a query alone return a list. You can use **Query** alongside IDs to choose the fields you get back. Leave both fields blank to list items up to the query limit.
 
 ## Update Data
 
@@ -71,7 +79,7 @@ Updates one or more items in a collection by ID or query.
 - **Permissions** — the role whose permissions the operation runs under
 - **Emit Events** — whether to fire event hooks
 
-Appends the updated key(s). With a single ID, this is a single primary key; with multiple IDs or a query, this is an array of primary keys.
+Returns the updated ID for a single ID, or a list of IDs for multiple IDs or a query. If you leave **Payload** blank on an otherwise valid step, it makes no changes and returns `null`.
 
 ## Delete Data
 
@@ -83,7 +91,7 @@ Deletes items from a collection by ID or query.
 - **Permissions** — the role whose permissions the operation runs under
 - **Emit Events** — whether to fire event hooks
 
-Appends the deleted key(s). With a single ID, this is a single primary key; with multiple IDs or a query, this is an array of primary keys.
+Returns the deleted ID for a single ID, or a list of IDs for multiple IDs or a query.
 
 For all four data operations, **Emit Events** controls whether the operation fires its own event hooks. Turn it off when this operation might trip the same flow that contains it, to prevent infinite loops.
 
